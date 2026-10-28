@@ -235,10 +235,11 @@ static uint32_t cf_panel_fix(uint32_t c, int colour)
 static uint8_t cf_hat_pc;   /* the root whose colours the hat wears now (3IS; unused here) */
 /* SKYLYNNE's night city: 52 the darkest navy (outlines, the towers), 53 white, 54 pale lavender, 55 mid blue; 56 .. 59
  * the sky, dark at the top to the purple glow of the horizon; 60 hot pink, 61 cyan, 62 amber, 63 mint: the voices' lights */
+#define SKY_RGB(r, g, b) (((uint32_t)(r) << 16) | ((uint32_t)(g) << 8) | (uint32_t)(b))
 static const uint32_t SKY_PAL[12] = {
-    0x070B1E, 0xF2F7FF, 0xB7C6FF, 0x6E86D8,
-    0x04061A, 0x0B1238, 0x1B2A6B, 0x4A3F8F,
-    0xFF3FA4, 0x2EE6FF, 0xFFB43A, 0x62FFB0,
+    SKY_RGB(7, 11, 30), SKY_RGB(242, 247, 255), SKY_RGB(183, 198, 255), SKY_RGB(110, 134, 216),
+    SKY_RGB(4, 6, 26), SKY_RGB(11, 18, 56), SKY_RGB(27, 42, 107), SKY_RGB(74, 63, 143),
+    SKY_RGB(255, 63, 164), SKY_RGB(46, 230, 255), SKY_RGB(255, 180, 58), SKY_RGB(98, 255, 176),
 };
 static void cf_palette_build(void)
 {
