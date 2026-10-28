@@ -586,8 +586,8 @@ static void sk_run_air(sk_voice_t *v, int32_t *o, uint32_t n)
         lo1 += (int32_t)(((int64_t)(v->f1 * 2) * bp1) >> 15);                /* the octave above, thinner */
         hp = x - lo1 - (int32_t)(((int64_t)(v->q * 2) * bp1) >> 15);
         bp1 += (int32_t)(((int64_t)(v->f1 * 2) * hp) >> 15);
-        bp0 = sk_clampi(bp0, -4000000, 4000000);
-        bp1 = sk_clampi(bp1, -4000000, 4000000);
+        bp0 = sk_clampi(bp0, -3900000, 3900000);
+        bp1 = sk_clampi(bp1, -3900000, 3900000);
         amp += (tgt - amp) >> v->sh;
         y = bp0 + (bp1 >> 1);
         o[i] = (int32_t)(((int64_t)y * (amp >> 8)) >> 13);
