@@ -1,3 +1,11 @@
-{
- "releases": []
-}
+[
+  {
+    "version": "0.1.0",
+    "tag": "v0.1.0",
+    "sha256": "ac2d0784a12f8aee70410f69fa9fb7f843cd18ec963498c2c62eb3332ec009e4",
+    "pkg": "coralflower-0.1.0.fwsc",
+    "date": "2026-10-28",
+    "title": "The sea cliff",
+    "notes": "First SKYLYNNE: six self-playing resonator voices on one tempo and scale, a lone figure on a sea cliff under the night sky, a new typeface. SELECT picks a voice, the four knobs shape it."
+  }
+]
