@@ -161,6 +161,7 @@ static void draw_fx_graph(uint32_t e, int x0, int yb, int w, int h)
  * the tip is a still crystal that twinkles; with MIX 0 the wand is dim and quiet. The colours are the hat's (palette
  * 60..63: they follow the chord's root, like the wizard's) and the ice */
 #define CF_KEYSTRIP 0
+#define CF_SKYHOME 1
 static void spell_disc(int cx, int cy, int rx, int ry, int col);
 static void spell_spark(int x, int y, int r);
 static void wand_glow(int cx, int cy, int r, uint8_t c)       /* a dithered disc: a glow that lets the picture through */
@@ -648,8 +649,13 @@ static void draw_spell(void)
     }
 }
 
+#include "sky_view.c"                       /* SKYLYNNE: the sea cliff at night */
 static void draw_home(void)
 {
+    if (CF_SKYHOME) {
+        draw_sky_home();
+        return;
+    }
     char key[16], k2[8];
     flora_render(&flo, &fl_cv);
     draw_plant(Y_VIEW);
@@ -1046,7 +1052,7 @@ static void cf_ui_draw(void)
                     cf_snd[cu.edit_part].name, FL_INK3, 1);
     }
     cu_hints = 0;                                /* (the screen names its hints while it draws: draw_hints) */
-    fb_clip(0, Y_VIEW, FB_W, cu.scr == SCR_FX ? Y_KNOBS : Y_VIEW + H_VIEW);   /* (FX has the key strip's space too) */
+    fb_clip(0, Y_VIEW, FB_W, cu.scr == SCR_FX || (CF_SKYHOME && cu.scr == SCR_HOME) ? Y_KNOBS : Y_VIEW + H_VIEW);   /* (FX has the key strip's space too) */
     if (cu.scr == SCR_HOME)
         draw_home();
     else if (cu.scr == SCR_SEL)
@@ -1089,7 +1095,9 @@ static void cf_ui_draw(void)
     fb_rect(0, Y_VIEW + H_VIEW, FB_W, Y_KEYS - Y_VIEW - H_VIEW, FL_BG);   /* the gap over the keys: the intro's plant
                                                   * (cf_splash.c, 4 px lower) left its stem's foot there, and no
                                                   * screen draws it (the owner saw it over the m6 key, 2026-10-19) */
-    if (cu.scr == SCR_HOME) {                    /* no keys drawn: the snow runs on under the wizard */
+    if (cu.scr == SCR_HOME && CF_SKYHOME) {
+        /* (the skyline has the whole space down to the knobs) */
+    } else if (cu.scr == SCR_HOME) {                    /* no keys drawn: the snow runs on under the wizard */
         int y0 = Y_VIEW + H_VIEW;
         fb_rect(0, y0, FB_W, Y_KNOBS - y0, fl_px[(FLH - 1) * FLW + 10]);
         fb_rect(0, y0, FB_W, 1, 55);

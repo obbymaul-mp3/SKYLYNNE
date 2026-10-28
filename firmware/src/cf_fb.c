@@ -165,9 +165,9 @@ static int fb_glyph(const cf_font_t *f, uint8_t ch, int x, int y, uint8_t c, int
     }
     b = f->bits + g->off;
     for (r = 0; r < f->h; r++) {
-        uint8_t row = b[r];
-        for (i = 0; row; i++, row = (uint8_t)(row << 1))
-            if (row & 0x80u) {
+        uint32_t row = f->rb == 2u ? ((uint32_t)b[2 * r] << 8) | b[2 * r + 1] : (uint32_t)b[r] << 8;
+        for (i = 0; row; i++, row = (row << 1) & 0xFFFFu)
+            if (row & 0x8000u) {
                 if (s == 1)
                     fb_pset(x + i, y + r, c);
                 else

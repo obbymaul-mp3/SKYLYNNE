@@ -8,21 +8,40 @@
 /* 3IS shows its own version here; FELUCCA_VERSION stays "CoralFlower ..": the update tool reads it */
 #define CF_SHOWN_VERSION "an Obby Mall synth"
 
+static const uint8_t SKYC[6] = {60, 61, 62, 63, 53, 54};
 static void cf_splash_frame(uint32_t t)
 {
     static const uint8_t SKY[4] = {FL_L0, FL_L1, FL_L2, FL_L3};
-    int r, cols, lx = 120 - ICE_LOGO_W, ly = 52;
+    int r;
     /* the night sky, 2 px rows, the bands dithered into each other */
     for (r = 0; r < 120; r++) {
         int tt = r * 768 / 120, i = tt >> 8;
         fb_rect(0, 2 * r, 240, 2, (tt & 255) > 128 && !(r & 1) ? SKY[i + 1] : SKY[i]);
     }
     cf_snow(0, 0, 240, 240, t * 3u, 60, 0x55u);
-    /* the logo wipes in from the left between 300 and 900 ms */
-    cols = t < 300u ? 0 : t >= 900u ? ICE_LOGO_W : (int)((t - 300u) * (uint32_t)ICE_LOGO_W / 600u);
-    fb_sprite2x(lx, ly, ice_logo, ICE_LOGO_W, ICE_LOGO_H, cols);
-    if (t > 900u)
-        fb_text_c(&CF_FONT_UI, 120, 190, CF_SHOWN_VERSION, FL_I_ICE3, 1);
+    /* the name lights up letter by letter between 300 and 1100 ms, over a skyline asleep */
+    {
+        static const char NM[] = "SKYLYNNE";
+        char b[2];
+        int i, nshow = t < 300u ? 0 : t >= 1100u ? 8 : (int)((t - 300u) * 8u / 800u) + 1, x = 120 - 8 * 14 / 2 * 2 / 2;
+        int cw = fb_text_w(&CF_FONT_UI, "S", 3) + 3, tw = cw * 8 - 3;
+        x = 120 - tw / 2;
+        for (i = 0; i < 8; i++) {                                    /* the towers' lights below it */
+            int bx = 14 + i * 28, bh = 14 + ((i * 37) % 23), on = i < nshow;
+            fb_rect(bx, 176 - bh, 22, bh + 12, 52);
+            fb_rect(bx + 3, 180 - bh, 3, 4, on ? SKYC[i % 6] : 55);
+            fb_rect(bx + 10, 188 - bh, 3, 4, on ? SKYC[(i + 2) % 6] : 55);
+            fb_rect(bx + 3, 198 - bh, 3, 4, on ? SKYC[(i + 4) % 6] : 55);
+        }
+        for (i = 0; i < 8; i++) {
+            b[0] = NM[i];
+            b[1] = 0;
+            if (i < nshow)
+                fb_text(&CF_FONT_UI, x + i * cw, 92, b, i == nshow - 1 && t < 1100u ? FL_INK : SKYC[i % 6], 3);
+        }
+    }
+    if (t > 1100u)
+        fb_text_c(&CF_FONT_UI, 120, 128, CF_SHOWN_VERSION, 54, 1);
 }
 
 /* main.c's splash (IRQs off): the first picture only, the scene before the seed sprouts; the UI's first frames grow it
