@@ -4,8 +4,8 @@
  *
  * The side it touches is the scale degree (so a hexagon is a six-note phrase), the ball is a voice (ball 1 plays voice 1
  * in its register and with its sound), the speed of the hit is the velocity. The shape's SPIN carries the balls round
- * and throws them; GRAVITY pulls them down; BOUNCE is how much of a hit is kept (above 100 % the walls add energy, so
- * the balls never settle). All integer, a fixed step of 1/60 s whatever the frame rate; the walls are the exact
+ * and throws them; GRAVITY pulls them down gently (they drift, they do not fall); BOUNCE is how much of a hit is kept (above 100 % the walls add energy, so
+ * the balls never settle). Balls bounce off each other without a sound. All integer, a fixed step of 1/60 s whatever the frame rate; the walls are the exact
  * sides of the polygon, moving with it. Included by sk_ui.c's unit; drawn on the scene's area. */
 
 #define PH_MAXB 6
@@ -71,7 +71,7 @@ static void ph_init(void)
 static void ph_step(void)
 {
     static uint8_t tr;
-    int g = 14 + ph.grav * 62 / 127;                       /* Q8 pixels per step^2 (0.05 .. 0.3) */
+    int g = 2 + ph.grav * 12 / 127;                        /* Q8 pixels per step^2 (0.008 .. 0.055): the balls drift down */
     int apo = ((PH_R << 8) >> 2) * SK_SIN[256 - 512 / ph.sides] >> 13;
     int w = ph.spin * 75 / 256;                             /* radians a step, Q8 (the angle moves spin * 12 / 65536 turns) */
     int e = 64 + ph.bounce * 72 / 127;                      /* Q7 .. 0.5 .. 1.1 */
@@ -106,13 +106,13 @@ static void ph_step(void)
                     b->vx -= (imp * c) >> 15;
                     b->vy -= (imp * sn) >> 15;
                     b->vx -= b->vx >> 6;                    /* a little grip */
-                    if (vn > 160 && !b->cool && ph.on) {
-                        uint32_t vel = 30u + (uint32_t)(vn > 1400 ? 1400 : vn) * 90u / 1400u;
+                    if (vn > 70 && !b->cool && ph.on) {
+                        uint32_t vel = 30u + (uint32_t)(vn > 900 ? 900 : vn) * 90u / 900u;
                         int deg = (int)s + (int)k * 2 - ph.sides / 2;
                         sk_play(k, sk_note_of(k, deg), vel);
                         b->cool = 8;
                     }
-                    if (vn > 160) {
+                    if (vn > 70) {
                         b->flash = 255;
                         b->side = (int8_t)s;
                         ph.edge[s] = 255;
@@ -132,6 +132,36 @@ static void ph_step(void)
             }
             b->tx[0] = (int16_t)(PH_CX + (b->x >> 8));
             b->ty[0] = (int16_t)(PH_CY + (b->y >> 8));
+        }
+    }
+    /* balls meet balls: an elastic bounce between equal masses, and no sound (only the walls play) */
+    for (k = 0; k + 1 < ph.nb; k++) {
+        uint32_t m;
+        for (m = k + 1; m < ph.nb; m++) {
+            ph_ball_t *a = &ph.b[k], *c = &ph.b[m];
+            int dx = (a->x - c->x) >> 4, dy = (a->y - c->y) >> 4;          /* Q4 pixels */
+            int d2 = dx * dx + dy * dy, lim = (2 * PH_BR) << 4;
+            if (d2 < lim * lim) {
+                int dist = d2 ? sc_isqrt(d2) : 1, nx, ny, vn, ov;
+                if (dist < 1)
+                    dist = 1;
+                nx = (dx << 11) / dist;                                    /* Q11 unit normal, from c to a */
+                ny = (dy << 11) / dist;
+                if (!d2)
+                    nx = 1 << 11, ny = 0;
+                ov = ((lim - dist) << 4) >> 1;                             /* half the overlap each, Q8 */
+                a->x += (nx * ov) >> 11;
+                a->y += (ny * ov) >> 11;
+                c->x -= (nx * ov) >> 11;
+                c->y -= (ny * ov) >> 11;
+                vn = (((a->vx - c->vx) * nx) + ((a->vy - c->vy) * ny)) >> 11;
+                if (vn < 0) {
+                    a->vx -= (vn * nx) >> 11;
+                    a->vy -= (vn * ny) >> 11;
+                    c->vx += (vn * nx) >> 11;
+                    c->vy += (vn * ny) >> 11;
+                }
+            }
         }
     }
 }
