@@ -7,8 +7,8 @@
  * ~77 ms, so a still picture costs nothing and the scene's moving parts are what travel. A palette change (a
  * scene's time of day) resends everything. The platform provides sk_lcd(x, y, w, h, pixels).
  *
- * The palette is the look: dusk lavenders and a pink horizon, or the blue-grey of a night, silhouettes in deep violet, soft
- * fireflies of orange and pink. Two themes share the indexes; a biome picks one. */
+ * The palette is the look: dusk lavenders and a pink horizon, or muted blue-greys and a dusty rose haze, silhouettes in deep slate, soft
+ * pastel fireflies. Three themes share the indexes; a biome picks one and the palette blends into it over seconds. */
 
 #include "sk_fonts.h"
 
@@ -34,26 +34,39 @@ enum {
     C_MIST, C_SCARF
 };
 
-static const uint32_t SK_THEME[2][40] = {
-    {   /* night: blue-greys */
-        0x0A0D1A,
-        0x161C30, 0x1E2640, 0x283250, 0x344060, 0x445470, 0x5C6E88,
-        0x586C88, 0x44587A, 0x34466A, 0x263658, 0x1A2844, 0x121C34,
-        0x0C1020, 0x151A30, 0x2E3550, 0x565F7C,
-        0xEEF0F6, 0xB4BCD2, 0xB8C2DA, 0xFAFAFF,
-        0xFFA05A, 0xFF8CAA, 0x96E6F0, 0x96F0BE, 0xFFE096,
-        0xE8E8F6, 0x9696B4, 0x181830, 0x2C2C4C, 0xB4AAFF, 0xFF96AA,
-        0x7A8AAA, 0xFF5C9C,
+#define FB_NTHEME 3
+/* three muted palettes: slate (a blue-grey night, a pale moon), dusk haze (mauve and a dusty rose horizon), and a green-grey
+ * mist. They are close in value so that they blend into each other without a jolt. The pops of colour are pastel. */
+static const uint32_t SK_THEME[FB_NTHEME][40] = {
+    {   /* slate night */
+        0x0E131C,
+        0x4A586C, 0x546278, 0x5E6C82, 0x697789, 0x748294, 0x8290A0,
+        0x7C8A9C, 0x707E92, 0x657388, 0x5A687D, 0x505E73, 0x465469,
+        0x141D2B, 0x1C2838, 0x2D3B4E, 0x4A5A6E,
+        0xE4EAF2, 0xA9B5C4, 0xD2DAE6, 0x9AA7B8,
+        0xC99C7C, 0xC4A0B0, 0x9CBCC8, 0x9CBCAA, 0xD2C8A0,
+        0xDDE3EC, 0x8C98AA, 0x161E2C, 0x273244, 0x9AA8C0, 0xC4A8B4,
+        0x8795A6, 0xC4808C,
     },
-    {   /* dusk: lavender and a pink horizon */
-        0x0E0C1E,
-        0x4E4A76, 0x6C6290, 0x8C7AA0, 0xA88AA8, 0xC49CB0, 0xD6B0B8,
-        0x9C7C9C, 0x6C5C86, 0x4E4672, 0x3A3660, 0x2C2A50, 0x1E1E3C,
-        0x161430, 0x24224A, 0x6A6684, 0x948EAA,
-        0xFAF2F6, 0xD8CCDC, 0xE6DCE8, 0xFFFFFF,
-        0xFFA05A, 0xFF8CAA, 0x96E6F0, 0x96F0BE, 0xFFE096,
-        0xF0E8F6, 0xA096BC, 0x1A1630, 0x322C54, 0xC8B4FF, 0xFF96AA,
-        0xB898B4, 0xFF5C9C,
+    {   /* dusk haze */
+        0x120F1A,
+        0x4C4C64, 0x5A5870, 0x6A6478, 0x7C7482, 0x8E8490, 0xA09198,
+        0x9A8C98, 0x877B8C, 0x766C80, 0x675F74, 0x5A5368, 0x4E495D,
+        0x1A1826, 0x242234, 0x38364A, 0x5A586E,
+        0xEADFE4, 0xB8AAB4, 0xDCD2DC, 0xA89CAC,
+        0xCCA084, 0xC8A0B2, 0xA0BCC8, 0xA0BCAA, 0xD6C8A0,
+        0xE2DCE8, 0x9A90AA, 0x1A1624, 0x302A40, 0xA8A0C0, 0xC8A4B4,
+        0x9A8C9E, 0xC4808C,
+    },
+    {   /* green-grey mist */
+        0x0C1418,
+        0x3C4C58, 0x465662, 0x50606C, 0x5C6C77, 0x687882, 0x75858D,
+        0x6F7F87, 0x64747E, 0x596974, 0x4F5E69, 0x455460, 0x3C4A55,
+        0x121A22, 0x1A2430, 0x2A3844, 0x465664,
+        0xDDE8E8, 0xA2B4B8, 0xCCDADC, 0x94A8AC,
+        0xC49C7C, 0xC4A0AC, 0x9CBEC6, 0x9CC0AC, 0xD0CCA0,
+        0xDCE6E8, 0x8A9CA2, 0x121C22, 0x24323A, 0x98B0B8, 0xC4A8AE,
+        0x84969C, 0xC4808C,
     },
 };
 
@@ -64,19 +77,66 @@ static uint16_t fb_dma[2][FB_W * FB_TS] SK_POOL;
 static uint8_t fb_full = 1;                       /* resend every tile at the next present */
 static int16_t fb_cx0, fb_cy0, fb_cx1 = FB_W, fb_cy1 = FB_H;   /* the clip rectangle */
 
+static uint8_t fb_cur[40][3], fb_tgt[40][3];     /* the palette now, and where it is going: R G B */
+static uint8_t fb_fade_on, fb_started;
+
+static void fb_lut_set(uint32_t i)
+{
+    uint32_t v = ((uint32_t)(fb_cur[i][0] & 0xF8u) << 8) | ((uint32_t)(fb_cur[i][1] & 0xFCu) << 3) | (fb_cur[i][2] >> 3);
+    uint16_t s = (uint16_t)(((v >> 8) & 0xFFu) | ((v & 0xFFu) << 8));
+    if (fb_lut[i] != s) {
+        fb_lut[i] = s;
+        fb_full = 1;
+    }
+}
+
+/* a theme becomes the target; the first one is taken at once, the next ones are blended in by fb_fade() */
 static void fb_theme(uint32_t t)
 {
     uint32_t i;
-    const uint32_t *rgb = SK_THEME[t & 1u];
+    const uint32_t *rgb = SK_THEME[t % FB_NTHEME];
     for (i = 0; i < 40u; i++) {
-        uint32_t c = rgb[i];
-        uint32_t v = ((c >> 8) & 0xF800u) | ((c >> 5) & 0x07E0u) | ((c >> 3) & 0x001Fu);
-        uint16_t s = (uint16_t)(((v >> 8) & 0xFFu) | ((v & 0xFFu) << 8));
-        if (fb_lut[i] != s) {
-            fb_lut[i] = s;
-            fb_full = 1;
+        fb_tgt[i][0] = (uint8_t)(rgb[i] >> 16);
+        fb_tgt[i][1] = (uint8_t)(rgb[i] >> 8);
+        fb_tgt[i][2] = (uint8_t)rgb[i];
+        if (!fb_started) {
+            fb_cur[i][0] = fb_tgt[i][0];
+            fb_cur[i][1] = fb_tgt[i][1];
+            fb_cur[i][2] = fb_tgt[i][2];
+            fb_lut_set(i);
         }
     }
+    fb_started = 1;
+    fb_fade_on = 1;
+}
+
+static void fb_theme_snap(uint32_t t)            /* at once (the crash and update screens, the splash) */
+{
+    fb_started = 0;
+    fb_theme(t);
+}
+
+/* every few frames: each colour moves a part of the way to its target (about 1/24, at least one step), so a change of
+ * mood takes several seconds and never jumps */
+static void fb_fade(void)
+{
+    uint32_t i, k, moving = 0;
+    if (!fb_fade_on)
+        return;
+    for (i = 0; i < 40u; i++) {
+        for (k = 0; k < 3u; k++) {
+            int d = (int)fb_tgt[i][k] - (int)fb_cur[i][k];
+            if (d) {
+                int st = d / 24;
+                if (!st)
+                    st = d > 0 ? 1 : -1;
+                fb_cur[i][k] = (uint8_t)(fb_cur[i][k] + st);
+                moving = 1;
+            }
+        }
+        fb_lut_set(i);
+    }
+    fb_fade_on = (uint8_t)moving;
 }
 
 static void fb_clip(int x0, int y0, int x1, int y1)

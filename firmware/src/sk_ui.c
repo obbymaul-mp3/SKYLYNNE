@@ -6,7 +6,7 @@
  *   SELECT      which of the six voices you are shaping (the figure points at it)
  *   ALGORITHM   that voice's kind: resonator, pluck, FM bell, pad, air
  *   PRESETS     the biome: a whole soundscape with its scale, tempo and room
- *   EDIT        the voice page: K1..K4 become LEVEL  PAN  DECAY  MATERIAL
+ *   EDIT        the voice page: K1..K4 become LEVEL  PAN  SUSTAIN  TONE
  *   SEQ         the physics page: K1..K4 become SPIN  GRAVITY  BOUNCE  BALLS, PRESETS the shape's sides
  *   HOME        back to the scene
  *   OCT- / OCT+ the tempo         PLAY  the voices wait, and the sound rings out
@@ -34,7 +34,7 @@ static struct {
 } ui;
 
 static const char *const UI_MAC[4] = {"DENSITY", "MOTION", "COLOUR", "SPACE"};
-static const char *const UI_EDITK[4] = {"LEVEL", "PAN", "DECAY", "MATERIAL"};
+static const char *const UI_EDITK[4] = {"LEVEL", "PAN", "SUSTAIN", "TONE"};
 static const char *const UI_PHYSK[4] = {"SPIN", "GRAVITY", "BOUNCE", "BALLS"};
 static const uint8_t UI_ACC[4] = {C_PINK, C_CYAN, C_YELLOW, C_GREEN};
 static const uint8_t UI_MACAIM[4] = {2, 0, 1, 5};      /* the part of the scene each macro points at */
@@ -111,12 +111,8 @@ static void ui_input(uint32_t now)
             switch (i) {
             case 0: sk_s.level[v] = (uint8_t)ui_clamp(sk_s.level[v] + d * 2, 0, 100); break;
             case 1: sk_s.pan[v] = (int8_t)ui_clamp(sk_s.pan[v] + d * 4, -64, 63); break;
-            case 2: sk_s.decay[v] = (int8_t)ui_clamp(sk_s.decay[v] + d, -6, 6); break;
-            default: {
-                uint32_t m = sk_s.type[v] == VT_BELL ? 4u : 6u;
-                sk_s.mat[v] = (uint8_t)((sk_s.mat[v] % m + m * 8u + (uint32_t)d) % m);
-                break;
-            }
+            case 2: sk_s.sus[v] = (int8_t)ui_clamp(sk_s.sus[v] + d, -6, 6); break;
+            default: sk_s.tone[v] = (int8_t)ui_clamp(sk_s.tone[v] + d, -6, 6); break;
             }
             ui.hud_t = now;
             ui_touch(v);
@@ -215,18 +211,15 @@ static void ui_panel(uint32_t now)
             switch (i) {
             case 0: v = sk_s.level[s]; frac = v * 255 / 100; ui_num(b, v); break;
             case 1: v = sk_s.pan[s]; frac = (v + 64) * 2; if (v) { char *e = ui_num(b, v < 0 ? -v : v); *e++ = v < 0 ? 'L' : 'R'; *e = 0; } else b[0] = 'C', b[1] = 0; break;
-            case 2: v = sk_s.decay[s]; frac = (v + 6) * 255 / 12; ui_num(b, v); break;
-            default:
-                frac = 255;
-                if (sk_s.type[s] == VT_RES || sk_s.type[s] == VT_BELL) {
-                    const char *m = sk_s.type[s] == VT_BELL ? SK_BELL_NAME[sk_s.mat[s] & 3u] : SK_MAT_NAME[sk_s.mat[s] % 6u];
-                    int k;
-                    for (k = 0; m[k] && k < 8; k++)
-                        b[k] = m[k];
-                    b[k] = 0;
-                } else
-                    b[0] = '-', b[1] = 0;
+            case 2:
+                v = sk_s.sus[s];
+                frac = (v + 6) * 255 / 12;
+                if (v >= 6)
+                    b[0] = 'i', b[1] = 'n', b[2] = 'f', b[3] = 0;
+                else
+                    ui_num(b, v);
                 break;
+            default: v = sk_s.tone[s]; frac = (v + 6) * 255 / 12; ui_num(b, v); break;
             }
         } else {
             label = UI_PHYSK[i];

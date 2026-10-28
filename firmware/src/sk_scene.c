@@ -20,7 +20,7 @@
 
 static const uint8_t SC_COL[SK_NV] = {C_PINK, C_CYAN, C_YELLOW, C_EMBER, C_GREEN, C_ACC};     /* the voices' colours */
 static const int16_t SC_AIM[SK_NV][2] = {{70, 30}, {150, 38}, {196, 50}, {170, 100}, {60, 90}, {150, 150}};
-static const uint8_t SC_THEME[8] = {1, 0, 0, 0, 0, 1, 0, 1};      /* a biome's sky: 0 night, 1 dusk */
+static const uint8_t SC_THEME[8] = {1, 0, 0, 2, 0, 2, 2, 1};      /* a biome's sky: 0 slate night, 1 dusk haze, 2 mist */
 
 enum { SV_SIT, SV_POINT, SV_TIDY, SV_SMOKE };
 
@@ -99,7 +99,7 @@ static void sc_update(uint32_t now)
             sc.hit[v] = now;
         }
         age = now - sc.hit[v];
-        dur = 900u + (uint32_t)(sk_s.decay[v] + 6) * 260u;
+        dur = 3000u + (uint32_t)(sk_s.sus[v] + 6) * 700u;
         e = age >= dur ? 0 : 255 - (int)(age * 255u / dur);
         base = (sk_s.mute >> v) & 1 ? 0 : sk_s.level[v] * 40 / 100;
         sc_e[v] = base + e * (255 - base) / 255;
@@ -148,30 +148,38 @@ static void sc_update(uint32_t now)
 static void sc_sky(void)
 {
     static const int EDGE[6] = {14, 32, 52, 70, 88, SC_HZ};
-    int i, y = 0;
+    static const uint8_t BAYER[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
+    int i, y = 0, x;
     for (i = 0; i < 6; i++) {
-        fb_rect(0, y, FB_W, EDGE[i] - y, (uint8_t)(C_S0 + i));
-        if (i < 5)
-            fb_checker(0, EDGE[i] - 3, FB_W, 3, (uint8_t)(C_S0 + i + 1));
-        y = EDGE[i];
+        for (; y < EDGE[i]; y++) {
+            int zone = EDGE[i] - y;                              /* rows to the next band: blended over the last 14 */
+            uint8_t c = (uint8_t)(C_S0 + i), c1 = (uint8_t)(C_S0 + (i < 5 ? i + 1 : i));
+            if (i < 5 && zone <= 14) {
+                int frac = 16 - zone * 16 / 15;                  /* 1 .. 16 of 16 */
+                const uint8_t *bt = BAYER + (y & 3) * 4;
+                for (x = 0; x < FB_W; x++)
+                    fb[y * FB_W + x] = bt[x & 3] < frac ? c1 : c;
+            } else
+                fb_rect(0, y, FB_W, 1, c);
+        }
     }
 }
 
 static void sc_stars(uint32_t now)
 {
     int i, e = sc_e[1];
-    for (i = 0; i < 44; i++) {
+    for (i = 0; i < 34; i++) {
         uint32_t k = sc_hash((uint32_t)i * 2654435761u + 0x51u);
         int x = (int)(k % 236u) + 2, y = 3 + (int)((k >> 9) % 78u);
         uint8_t c = ((k >> 20) & 3u) ? C_STAR2 : C_STAR;
         if (((now >> 7) + (k >> 12)) % 29u == 0u)
             c = C_STAR;
         fb_pset(x, y, c);
-        if (e > 50 && i * 127 / 44 < sk_s.mac[0] + 20) {          /* a flash: a cross as large as the light */
-            int s = 1 + e / 90, d;
+        if (e > 120 && i * 127 / 34 < sk_s.mac[0] / 2) {          /* a faint twinkle: a small cross */
+            int s = 1, d;
             fb_pset(x, y, C_STAR);
             for (d = 1; d <= s; d++) {
-                uint8_t cc = d == 1 ? C_STAR : C_STAR2;
+                uint8_t cc = C_STAR2;
                 fb_pset(x - d, y, cc);
                 fb_pset(x + d, y, cc);
                 fb_pset(x, y - d, cc);
@@ -183,14 +191,14 @@ static void sc_stars(uint32_t now)
 
 static void sc_moon(void)
 {
-    int e = sc_e[1], cx = 172, cy = 46, R = 9, gl = 2 + e * 9 / 255, i, j, m = R + gl + 1;
+    int e = sc_e[1], cx = 172, cy = 46, R = 10, gl = 4 + e * 6 / 255, i, j, m = R + gl + 1;
     for (j = -m; j <= m; j++)
         for (i = -m; i <= m; i++) {
             int d2 = i * i + j * j;
-            if (d2 > R * R && d2 <= (R + gl) * (R + gl) && ((i + j) & 1) == 0)
-                fb_pset(cx + i, cy + j, d2 < (R + gl / 2) * (R + gl / 2) ? C_S5 : C_S4);
-            else if (d2 <= R * R && (i - 3) * (i - 3) + (j + 1) * (j + 1) > (R - 1) * (R - 1))
-                fb_pset(cx + i, cy + j, C_MOON);
+            if (d2 <= R * R)
+                fb_pset(cx + i, cy + j, d2 > (R - 1) * (R - 1) ? C_MOON2 : C_MOON);
+            else if (d2 <= (R + gl) * (R + gl) && ((i + j) & 1) == 0 && d2 < (R + gl / 2) * (R + gl / 2))
+                fb_pset(cx + i, cy + j, C_S5);                    /* a faint halo, dithered */
         }
 }
 
@@ -200,15 +208,11 @@ static void sc_aurora(uint32_t now)
     if (e < 40)
         return;
     for (x = 4; x < 170; x += 2) {
-        int top = 8 + (sc_tri(x * 2 + (int)(now >> 5)) >> 4);
-        int len = 8 + (e * 36 >> 8) + (sc_tri(x * 3 - (int)(now >> 6)) >> 4), k;
-        uint8_t c0 = (x / 28) & 1 ? C_GREEN : C_PINK;
-        for (k = 0; k < len; k++) {
-            if (((k + (x >> 1)) & 1) == 0 && k < len / 3 * 2)
-                fb_pset(x, top + k, k < len / 3 ? c0 : C_ACC);
-            else if (((k + (x >> 1)) & 3) == 0)
-                fb_pset(x, top + k, C_S4);
-        }
+        int top = 8 + (sc_tri(x * 2 + (int)(now >> 6)) >> 4);
+        int len = 8 + (e * 26 >> 8) + (sc_tri(x * 3 - (int)(now >> 7)) >> 4), k;
+        for (k = 0; k < len; k++)
+            if (((k + (x >> 1)) & 3) == 0)
+                fb_pset(x, top + k, k < len / 2 ? C_S5 : C_S4);
     }
 }
 
@@ -225,7 +229,7 @@ static void sc_comet(uint32_t now)
     for (t = 0; t < n; t++) {
         if (t > 6 && (t & 1))
             continue;
-        fb_pset(hx + t * 2, hy - t, t < 2 ? C_STAR : C_YELLOW);
+        fb_pset(hx + t * 2, hy - t, t < 2 ? C_STAR : C_STAR2);
     }
 }
 
@@ -472,8 +476,8 @@ static void sc_water(uint32_t now)
     for (y = SC_HZ + 2; y < SC_H; y += 2) {
         int dp = y - SC_HZ, w = 2 + dp / 6 + (e1 >> 6);
         int wob = ((sc_tri((y << 3) + (int)(now >> 4)) - 128) * (3 + dp / 20)) >> 7;
-        if (sc_hash((uint32_t)y * 13u + (now >> 8)) % 5u != 0u)
-            fb_hline(172 + wob - w / 2, y, w, e1 > 150 ? C_MOON : C_MOON2);
+        if (sc_hash((uint32_t)y * 13u + (now >> 8)) % 3u == 0u)
+            fb_hline(172 + wob - w / 2, y, w, C_MOON2);
     }
     /* the far lights' streaks, ripples from the sub's strikes */
     {
@@ -551,6 +555,9 @@ static void sc_foreground(void)
 
 static void sc_draw(uint32_t now)
 {
+    static uint8_t fadet;
+    if ((++fadet & 1u) == 0)
+        fb_fade();
     fb_unclip();
     sc_sky();
     sc_aurora(now);

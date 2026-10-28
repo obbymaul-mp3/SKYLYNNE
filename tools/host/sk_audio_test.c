@@ -15,23 +15,15 @@
 /* tone TYPE NOTE: one voice struck once, dry (the room off), to WAV: for checking pitch and level */
 static int tone(int type, int note, const char *path)
 {
-    uint32_t total = 44100 * 3 / SK_CTL * SK_CTL, i, k;
+    uint32_t total = 44100 * 12 / SK_CTL * SK_CTL, i, k;
     int16_t *pcm = malloc(total * 4);
     int32_t buf[2 * SK_CTL], l[SK_CTL], r[SK_CTL], rv[SK_CTL], gb[SK_CTL];
     sk_load(&SK_BIOMES[0]);
     sk_s.type[0] = (uint8_t)type;
-    sk_s.mat[0] = 1;
     sk_s.mute = 0x3E;
     sk_s.hold = 1;
     sk_pan(&sk_v[0], 0);
-    sk_v[0].type = (uint8_t)type;
-    switch (type) {
-    case VT_PLUCK: sk_start_pluck(&sk_v[0], (uint32_t)note, 14, 100, 70, 0); break;
-    case VT_BELL: sk_start_bell(&sk_v[0], (uint32_t)note, 0, 14, 100, 70); break;
-    case VT_PAD: sk_start_pad(&sk_v[0], (uint32_t)note, 8, 100, 70, 7000); break;
-    case VT_AIR: sk_start_air(&sk_v[0], (uint32_t)note, 8, 100, 70, 7000); break;
-    default: sk_start_res(&sk_v[0], (uint32_t)note, 1, 14, 100, 70); break;
-    }
+    sk_start(&sk_v[0], (uint32_t)type, (uint32_t)note, 24, 100, 70, 7000);
     for (i = 0; i < total; i += SK_CTL) {
         for (k = 0; k < SK_CTL; k++)
             l[k] = r[k] = rv[k] = gb[k] = 0;
