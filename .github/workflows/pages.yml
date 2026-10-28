@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
-# Publish the GitHub Pages site: https://ficusficusov.github.io/CoralFlower/ (put together by tools/make_site.sh)
-#   /           what CoralFlower is, and its installer (web/index.html, web/site.css, web/fonts, web/fm1*.js)
-#   /play/      the browser emulator (tools/emu/web, built with Emscripten)
+# Publish the GitHub Pages site: https://obbymaul-mp3.github.io/SKYLYNNE/ (put together by tools/make_site.sh)
+#   /           what SKYLYNNE is, and its installer (web/index.html, web/site.css, web/fonts, web/fm1*.js)
+#   /play/      the browser version (tools/web, built with clang to wasm32)
 #   /install/   the old installer address, forwarding to /#install
 #   /firmware/  the packages web/releases.json lists, each downloaded from its release and checked against its
 #               sha256 (a browser cannot fetch a release asset: no CORS), with releases.json, SHA256SUMS and the
@@ -14,7 +14,8 @@ on:
   push:
     branches: [main]
     paths:
-      - "tools/emu/**"
+      - "tools/web/**"
+      - "tools/build_web.sh"
       - "web/**"
       - "firmware/**"
       - "assets/**"
@@ -37,8 +38,6 @@ defaults:
 env:
   PYTHON_VERSION: "3.11"
   PILLOW_VERSION: "11.1.0"
-  FONTTOOLS_VERSION: "4.66.1"
-  EMSDK_VERSION: "6.0.12"           # the Emscripten the emulator is made with on the Mac
 
 jobs:
   site:
@@ -53,25 +52,18 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Python packages (Pillow with Raqm, fontTools)
+      - name: Python packages (Pillow) and the wasm toolchain (clang, lld)
         run: |
           set -euo pipefail
           sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends libfribidi0 libraqm0
-          python3 -m pip install --disable-pip-version-check "Pillow==$PILLOW_VERSION" "fonttools==$FONTTOOLS_VERSION"
+          sudo apt-get install -y -q --no-install-recommends clang lld
+          python3 -m pip install --disable-pip-version-check "Pillow==$PILLOW_VERSION"
 
-      - uses: mymindstorm/setup-emsdk@4528d102f7230f0e7b276855c01ea1159be0e984 # v16
-        with:
-          version: ${{ env.EMSDK_VERSION }}
-          actions-cache-folder: emsdk-cache
-
-      - name: Build the browser emulator (tools/emu/web)
+      - name: Build the browser version (tools/build_web.sh)
         run: |
           set -euo pipefail
-          emcc --version | head -1
-          # the generated headers only (the whole tools/build.py needs the JieLi toolchain; the emulator does not)
-          python3 -c 'import sys; sys.path.insert(0, "tools"); import build; build.generate()'
-          sh tools/emu/web/build_web.sh
+          clang --version | head -1
+          sh tools/build_web.sh
 
       - name: The packages of web/releases.json
         env:
@@ -83,7 +75,7 @@ jobs:
           python3 -c 'import json; [print(r["version"], r["tag"], r["sha256"]) for r in json.load(open("build/site/firmware/releases.json"))["releases"]]' > build/list.txt
           : > build/site/firmware/SHA256SUMS
           while read -r v tag sha; do
-            pkg="coralflower-$v.fwsc"
+            pkg="skylynne-$v.fwsc"
             gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "$pkg" --dir build/site/firmware --clobber
             echo "$sha  build/site/firmware/$pkg" | sha256sum -c -
             echo "$sha  $pkg" >> build/site/firmware/SHA256SUMS

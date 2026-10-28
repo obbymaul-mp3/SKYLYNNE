@@ -1,22 +1,41 @@
 # SKYLYNNE
 
-A self-playing firmware for the M-VAVE FM-1: six resonator voices that play themselves on one shared tempo and
-scale, a granular bus that reshapes them, and a night-sky city skyline that lights up with the music.
+Ambient firmware for the M-VAVE FM-1. Six voices play themselves on one tempo and scale. Four macro knobs
+(DENSITY, MOTION, COLOUR, SPACE) shape them, and each voice can be edited: type, level, pan, decay, material.
+Icy bells, glassy plucks, detuned pads, deep sub and a very large reverb.
 
-**Status: just started.** This repository begins as a copy of the 3IS firmware tree (CoralFlower, with ChoralRoot,
-Felucca and fm1-x0x underneath), so that the proven hardware layer (boot, screen, audio, keys, flash, second core,
-the update loader) is already here. The instrument on top of it is being replaced step by step with a new one.
-The old chord instrument is still what this builds until the new engine takes over.
+A second page is a physics sequencer: a polygon spins, balls fall inside it, and every wall hit plays a note on
+one of the voices.
 
-## Plan
+The screen is a figure on a cliff at dusk, looking over water. The scene follows the biome you pick.
 
-1. A new skyline screen and one self-playing resonator voice.
-2. Six voices, materials, shared tempo and scale, generative "biomes".
-3. The granular bus, with a send per voice, tempo sync, fifth/octave layers and freeze.
-4. Feedback from the grains into the resonators; presets; four live macros.
-5. Polish and load testing on the real FM-1.
+Try it in the browser before installing anything: build with `tools/build_web.sh` and open `build/web/play/`
+(or use the published page).
+
+## Controls
+
+| Control | Does |
+| --- | --- |
+| SELECT | pick the voice |
+| ALGORITHM | voice type |
+| PRESETS | biome (on the physics page: number of sides) |
+| K1–K4 | DENSITY, MOTION, COLOUR, SPACE (on a voice page: LEVEL, PAN, DECAY, MATERIAL) |
+| OCT− / OCT+ | tempo |
+| PLAY | hold |
+| keys 1–6 | mute voices; other keys play the selected voice |
+| MASTER | output volume |
+
+## Build
+
+- `./build.sh [--release X.Y]` builds the device package (needs the JieLi toolchain; CI does this).
+- `tools/build_web.sh` builds the browser version (clang with wasm32 and lld).
+- `tools/host/sk_host.c` is a script-driven host harness for screenshots and audio renders.
+
+## Update mode
+
+Hold OCT− at power-on, or inside SKYLYNNE hold OCT− + OCT+ + HOME for 5 seconds.
 
 ## Licence
 
-GPL-3.0-only, as the hardware layer's authors require (see LICENSE, LICENSING.md and LICENSES/ for the credits and
-the licences of the parts this stands on).
+GPL-3.0-only. See `LICENSING.md` for credits (Felucca and ChoralRoot for the hardware layer, Sora and Departure Mono
+fonts, the JieLi SDK files).
