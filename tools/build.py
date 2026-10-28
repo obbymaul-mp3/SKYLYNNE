@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
-"""Build CoralFlower (after ChoralRoot FM-1): the app, the update loader and an installable .fwsc package.
+"""Build SKYLYNNE: the app, the update loader and an installable .fwsc package.
 
   tools/build.py [--release X.Y[-suffix]]
 
-The unit is firmware/src/coralflower.c (CoralFlower's single compilation unit, after ChoralRoot's choralroot.c, a
-fork of Felucca's felucca.c). Outputs in build/: coralflower.bin (app.bin: the boot stub's 0xEE0 bytes, then the app),
-coralflower.elf, coralflower.dis (the app), stub/stub.{bin,elf,dis} (the boot stub, firmware/stub), loader/ota.bin
-(update loader), coralflower.fwsc (package, identity FM-1_930). A release build (--release X.Y) keeps the identity,
-sets the version string to "CoralFlower X.Y" and writes coralflower-X.Y.fwsc and a folder release-X.Y/ with the
-package, the app (coralflower-X.Y-app.bin), SHA256SUMS and the licence files (LICENSE, LICENSING.md, LICENSES/).
+The unit is firmware/src/skylynne.c (SKYLYNNE's single compilation unit). Outputs in build/: skylynne.bin (app.bin:
+the boot stub's 0xEE0 bytes, then the app), skylynne.elf, skylynne.dis (the app), stub/stub.{bin,elf,dis} (the boot
+stub, firmware/stub), loader/ota.bin (update loader), skylynne.fwsc (package, identity FM-1_930). A release build
+(--release X.Y) keeps the identity, sets the version string to "SKYLYNNE X.Y" and writes skylynne-X.Y.fwsc and a folder
+release-X.Y/ with the package, the app (skylynne-X.Y-app.bin), SHA256SUMS and the licence files (LICENSE,
+LICENSING.md, LICENSES/).
 After the checks it prints the section sizes against the XIP slot and the RAM / POOL / NOINIT regions.
 See BUILDING.md for the toolchain and the SDK.
 
@@ -56,9 +56,9 @@ SDK_SHA256 = {
     "cfg/eq_cfg_hw.bin": "41167491bffed4651750719c973d2758adeb9021a5670d02d6a53c85ed80ea7d",
 }
 
-UNIT = "coralflower"                # firmware/src/UNIT.c; outputs build/UNIT.{bin,elf,dis,fwsc}
-PRODUCT = "FM-1_930"                # package identity (CoralFlower: constant, releases too)
-VERSION = None                      # FELUCCA_VERSION for release builds (default: firmware/src/coralflower.c)
+UNIT = "skylynne"                   # firmware/src/UNIT.c; outputs build/UNIT.{bin,elf,dis,fwsc}
+PRODUCT = "FM-1_930"                # package identity (the unit's: constant, releases too)
+VERSION = None                      # SK_VERSION for release builds (default: firmware/src/skylynne.c)
 XIP_LEN, RAM_LEN, POOL_LEN, NOINIT_LEN = fm1pkg_make.BODY_MAX, 96 * 1024, 0x54000, 0x3D30   # firmware/app.ld
 
 
@@ -100,19 +100,10 @@ def tc_all(*cmds):
 
 
 def generate():
-    """generated headers (UI fonts, icons, keycaps, palettes, tables, samples)"""
+    """generated headers (the screen's font)"""
     GEN.mkdir(parents=True, exist_ok=True)
-    for old in ("felucca_font.h", "felucca_icons.h"):     # headers of the bitmap font and icon atlas
-        (GEN / old).unlink(missing_ok=True)
     tools = SRC / "tools"
-    cmds = [[tools / "gen_aa_font.py", GEN / "ui_fonts.h", "--preset", "inter-tight"],
-            [tools / "gen_pixfont.py", GEN / "cf_fonts.h"],                            # CoralFlower's pixel type
-            [tools / "gen_aa_icons.py", GEN / "ui_icons.h"],
-            [tools / "gen_aa_keycaps.py", GEN / "ui_keycaps.h"],
-            [tools / "gen_ui_palettes.py", GEN / "ui_palettes.h"],
-            [tools / "gen_tables.py", GEN / "felucca_tables.h"],
-            [tools / "gen_fm6_patches.py", GEN / "felucca_fm6.h"],
-            [tools / "gen_samples.py", GEN / "felucca_samples.h"]]
+    cmds = [[tools / "gen_pixfont.py", GEN / "sk_fonts.h"]]                  # the screen's type
     procs = [subprocess.Popen([sys.executable, *map(str, c)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               text=True) for c in cmds]
     failed = []
@@ -251,32 +242,12 @@ def build_stub():
 
 def build_app(stub):
     flags = [*CFLAGS, "-Ifirmware/hal", "-Ifirmware/src", "-Ibuild/gen"]
-    for flag in ("FELUCCA_FLASH", "FELUCCA_OTA", "FELUCCA_OTA_DRYRUN", "FELUCCA_OTA_RAMONLY", "FELUCCA_CDC",
-                 "FELUCCA_UART", "FELUCCA_UAC", "FELUCCA_ICONS", "FELUCCA_KEYCAPS", "FELUCCA_SLICE",
-                 "FELUCCA_SLICER", "FELUCCA_FM4", "FELUCCA_SAMPLE", "FELUCCA_GRAIN", "FELUCCA_DRUM", "FELUCCA_SEQ",
-                 "FELUCCA_CZ", "FELUCCA_QUAD", "FELUCCA_ANALOG", "FELUCCA_PHASE", "FELUCCA_LOFI", "FELUCCA_VOICE",
-                 "FELUCCA_TRIO", "FELUCCA_NOISE", "FELUCCA_PHYS"):
-        v = os.environ.get(flag)    # unset: the default in firmware/src/coralflower.c
-        if v in ("0", "1"):
-            flags.append(f"-D{flag}={v}")
-    # the delay's and the reverb's rate (1 full, 2 half) and their loops in RAM (docs/FX.md "Half rate or full"): for
-    # the builds that are measured against each other on the unit; unset: firmware/src/cr_fx.c's defaults
-    for flag, ok in (("CR_FX_DELAY_DS", ("1", "2")), ("CR_FX_REVERB_DS", ("1", "2")), ("CR_FX_RAM", ("0", "1")),
-                     ("CR_FX_LITE", ("0", "1"))):
-        v = os.environ.get(flag)
-        if v in ok:
-            flags.append(f"-D{flag}={v}")
-    if os.environ.get("CR_ACK_LATE") == "1":      # the audio half's pending bit cleared after the render, as to 0.18's
-        flags.append("-DFM1_AUDIO_ACK_LATE=1")    # second build (firmware/src/audio.c fm1_alnk0_irq)
-    if os.environ.get("CR_OUT_MAKEUP") == "1":    # Options > Output Clean: the 2.5 dB its trim takes given back after the
-        flags.append("-DCLN_MAKEUP=5461")         # knee, in the DAC word's upper 6 dB (firmware/src/fx.c CLN_MAKEUP;
-                                                  # docs/AUDIO-QUALITY.md "Proposed": not a default, to be heard first)
     flags.append(f'-DFELUCCA_ID="{PRODUCT}"')
     if VERSION:
-        flags.append(f'-DFELUCCA_VERSION="{VERSION}"')
+        flags.append(f'-DSK_VERSION="{VERSION}"')
     # the unit goes to LLVM IR without the optimizer, the main-loop functions (UI, screens, stores) are
-    # marked minsize (tools/size_fns.py), then the IR is compiled at -Os. FELUCCA_SIZE=0: -Os everywhere
-    size = os.environ.get("FELUCCA_SIZE") != "0"
+    # marked minsize (tools/size_fns.py), then the IR is compiled at -Os. SK_SIZE=0: -Os everywhere
+    size = os.environ.get("SK_SIZE") != "0"
     unit = FW / "src" / f"{UNIT}.c"
     cmain = (("cc", *flags, "-S", "-emit-llvm", "-Xclang", "-disable-llvm-optzns", "-c",
               unit, "-o", OUT / f"{UNIT}.ll") if size else
@@ -361,14 +332,18 @@ def check(img, syms, dis, rt):
         errors.append(f".ram_text contains calls: {rt_calls[:3]}")
     else:
         notes.append(f".ram_text: {len([ln for ln in rt.splitlines() if LINE.match(ln)])} insns, no calls")
+    fn = "?"
     for ln in dis.splitlines():     # nothing may call or load an address in the chip ROM
+        mf = re.match(r"^[0-9a-f]+ <([^>]+)>:", ln)
+        if mf:
+            fn = mf.group(1)
         mm = LINE.match(ln)
         if not mm:
             continue
         for v in re.findall(r"= (-?\d+) <|call -?\d+ <[^:>]*: ([0-9a-f]+) >", mm.group(3)):
             val = (int(v[0]) & 0xFFFFFFFF) if v[0] else int(v[1], 16) & 0xFFFFFFFF
             if 0xFFC00000 <= val < 0xFFD00000:
-                errors.append(f"reference to ROM address {val:#010x}")
+                errors.append(f"reference to ROM address {val:#010x} in {fn}: {ln.strip()[:90]}")
     if len(img) - STUB_LEN > XIP_LEN:
         errors.append(f"the app is {len(img) - STUB_LEN} B, the room below the marker's sector is {XIP_LEN} B")
 
@@ -435,7 +410,7 @@ def mmio_check():
 def main():
     global VERSION
     ap = argparse.ArgumentParser()
-    ap.add_argument("--release", metavar="X.Y", help=f"release build: identity {PRODUCT}, version string CoralFlower X.Y")
+    ap.add_argument("--release", metavar="X.Y", help=f"release build: identity {PRODUCT}, version string SKYLYNNE X.Y")
     ap.add_argument("--sdk", type=Path, help="JieLi AC79 SDK checkout (default: $AC79_SDK)")
     a = ap.parse_args()
     name = f"{UNIT}.fwsc"
@@ -443,7 +418,7 @@ def main():
         m = re.fullmatch(r"\d+\.\d+(?:\.\d+)?(?:-[A-Za-z0-9.]+)?", a.release)   # the identity never encodes it
         if not m:
             raise SystemExit(f"--release {a.release}: use X.Y, X.Y.Z or X.Y-suffix")
-        VERSION = "CoralFlower " + a.release.lower()     # e.g. CoralFlower 0.1, CoralFlower 0.1-rc1 (the INFO text)
+        VERSION = "SKYLYNNE " + a.release.lower()          # e.g. SKYLYNNE 0.2, SKYLYNNE 0.2-rc1 (the splash text)
         name = f"{UNIT}-{a.release}.fwsc"
     fm1pkg_make.SDK = a.sdk
     for rel, sha in SDK_SHA256.items():          # fail early without the SDK
@@ -474,11 +449,6 @@ def main():
           f"{hashlib.sha256(flash[0x4000:0x5000]).hexdigest()[:16]}; marker at 0x91fe0, body "
           f"{len(img) - STUB_LEN + (-len(img) % 4)} B")
     (OUT / name).write_bytes(pkg)
-    att = SRC / "assets" / "samples-cc0" / "ATTRIBUTION.txt"
-    att_on = att.exists() and os.environ.get("FELUCCA_SAMPLE") == "1"   # the SAMPLE sets' credit: only when built in
-    (OUT / "ATTRIBUTION.txt").unlink(missing_ok=True)
-    if att_on:
-        shutil.copy(att, OUT / "ATTRIBUTION.txt")
     print(f"app      {OUT / f'{UNIT}.bin'}  {len(img)} B")
     print(f"loader   {LDR / 'ota.bin'}  {len(ota)} B")
     print(f"package  {OUT / name}  {len(pkg)} B, identity {PRODUCT}")
@@ -495,8 +465,6 @@ def main():
             shutil.copy(f, rel / "LICENSES" / f.name)
         for doc in ("LICENSE", "LICENSING.md"):
             shutil.copy(SRC / doc, rel / doc)
-        if att_on:
-            shutil.copy(att, rel / "ATTRIBUTION.txt")
         print(f"release  {rel}/")
     return 0
 

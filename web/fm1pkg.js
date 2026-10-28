@@ -10,7 +10,7 @@ export const STOCK_APP_SIZE = 0x8DFBC;
 export const STOCK_V15_SIZE = 699956;
 // the official files a return to stock accepts: each pinned by size and SHA-256, then its layout is checked. V16
 // (2026-10-21) has a bigger image (0xA9000, DX7.bin and SEQ64 areas) than V15 (0x93000); the return writes the
-// official image as it is, whatever its size. (3IS's own packages keep the V15 layout: STOCK_APP_SIZE above.)
+// official image as it is, whatever its size. (Every SKYLYNNE package keeps the V15 layout: STOCK_APP_SIZE above.)
 export const STOCK_FILES = [
   { name: "V15", product: "FM-1_015", size: STOCK_V15_SIZE, flashSize: 602112, appOff: 16672, appSize: STOCK_APP_SIZE,
     sha256: STOCK_V15_SHA256 },

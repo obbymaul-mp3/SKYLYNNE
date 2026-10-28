@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
-# Build the CoralFlower package (after ChoralRoot FM-1's release.yml).
-#   workflow_dispatch (version)  -> build only; the package is a workflow artifact (coralflower-X.Y): a candidate to
+# Build the SKYLYNNE package .
+#   workflow_dispatch (version)  -> build only; the package is a workflow artifact (skylynne-X.Y): a candidate to
 #                                   test on a unit (the web installer's "Choose a .fwsc file")
 #   push of a tag vX.Y           -> build, create the GitHub release vX.Y with the assets, then run pages.yml
 # On ubuntu (x86-64) tools/build.py runs the JieLi toolchain natively, no Docker.
@@ -30,10 +30,9 @@ defaults:
 env:
   # the three SDK files the package uses (tools/fm1pkg_make.py); their SHA-256 are tools/build.py SDK_SHA256
   AC79_SDK_TAG: AC79NN_SDK_V1.2.1_2023-12-13
-  # as ChoralRoot's reference builds: the generated headers (fonts with Raqm) depend on these versions
+  # the generated font header depends on the Pillow version (Basic layout, no Raqm)
   PYTHON_VERSION: "3.11"
   PILLOW_VERSION: "11.1.0"
-  FONTTOOLS_VERSION: "4.66.1"
 
 jobs:
   build:
@@ -66,13 +65,12 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Python packages (Pillow with Raqm, fontTools)
+      - name: Python packages (Pillow)
         run: |
           set -euo pipefail
           sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends libfribidi0 libraqm0 zip
-          python3 -m pip install --disable-pip-version-check "Pillow==$PILLOW_VERSION" "fonttools==$FONTTOOLS_VERSION"
-          python3 -c 'from PIL import features; import sys; ok = features.check("raqm"); print("raqm", features.version("raqm")); sys.exit(0 if ok else "Pillow has no Raqm layout")'
+          sudo apt-get install -y -q --no-install-recommends zip
+          python3 -m pip install --disable-pip-version-check "Pillow==$PILLOW_VERSION"
 
       - name: Cache the JieLi toolchain
         id: toolchain-cache
@@ -116,7 +114,7 @@ jobs:
           grep -E "^size:" build.log | tail -1 | while IFS= read -r l; do echo "::notice::${l:0:400}"; done
           if [ "$rc" != 0 ]; then exit "$rc"; fi
           rel="build/release-$VERSION"
-          for f in "coralflower-$VERSION.fwsc" "coralflower-$VERSION-app.bin" SHA256SUMS LICENSE LICENSING.md; do
+          for f in "skylynne-$VERSION.fwsc" "skylynne-$VERSION-app.bin" SHA256SUMS LICENSE LICENSING.md; do
             if [ ! -s "$rel/$f" ]; then
               echo "::error::$rel/$f is missing"
               exit 1
@@ -127,7 +125,7 @@ jobs:
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: coralflower-${{ env.VERSION }}
+          name: skylynne-${{ env.VERSION }}
           path: build/release-${{ env.VERSION }}/
           if-no-files-found: error
 
@@ -149,14 +147,14 @@ jobs:
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: coralflower-${{ needs.build.outputs.version }}
+          name: skylynne-${{ needs.build.outputs.version }}
           path: release
 
       - name: Collect the release assets
         run: |
           set -euo pipefail
           mkdir assets
-          for f in "coralflower-$VERSION.fwsc" "coralflower-$VERSION-app.bin" SHA256SUMS LICENSE LICENSING.md LICENSES.zip; do
+          for f in "skylynne-$VERSION.fwsc" "skylynne-$VERSION-app.bin" SHA256SUMS LICENSE LICENSING.md LICENSES.zip; do
             cp "release/$f" assets/
           done
           ls -l assets
@@ -167,9 +165,9 @@ jobs:
           {
             if [ -f "docs/releases/$VERSION.md" ]; then cat "docs/releases/$VERSION.md"; echo; echo "---"; echo; fi
             sed "s/@VERSION@/$VERSION/g" <<'EOT'
-          CoralFlower @VERSION@ for the M-VAVE FM-1 (package identity FM-1_930).
+          SKYLYNNE @VERSION@ for the M-VAVE FM-1 (package identity FM-1_930).
 
-          Install it from your browser at https://ficusficusov.github.io/CoralFlower/ (Chrome or Edge on a computer, with the FM-1 connected by USB). You can also try CoralFlower in the browser first, with no install: https://ficusficusov.github.io/CoralFlower/play/
+          Install it from your browser at https://obbymaul-mp3.github.io/SKYLYNNE/ (Chrome or Edge on a computer, with the FM-1 connected by USB). You can also try SKYLYNNE in the browser first, with no install: https://obbymaul-mp3.github.io/SKYLYNNE/play/
 
           `SHA256SUMS` lists the package and the app. The package holds three JieLi AC79 SDK files (Apache-2.0); `LICENSE`, `LICENSING.md` and `LICENSES.zip` carry every licence. Installing firmware is at your own risk; the official M-VAVE firmware can always be reinstalled.
           EOT
@@ -179,7 +177,7 @@ jobs:
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ github.ref_name }}
-          name: CoralFlower ${{ needs.build.outputs.version }}
+          name: SKYLYNNE ${{ needs.build.outputs.version }}
           prerelease: ${{ contains(needs.build.outputs.version, '-') }}
           fail_on_unmatched_files: true
           files: assets/*

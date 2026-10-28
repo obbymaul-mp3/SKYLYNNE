@@ -1,0 +1,568 @@
+/* SPDX-License-Identifier: GPL-3.0-only
+ * Copyright (C) 2026 SKYLYNNE contributors */
+/* SKYLYNNE's home scene: a lone figure sits on the edge of a cliff and looks out over the water under a dusk or night sky.
+ *
+ * Each of the six voices is a part of what they see, and a strike lights its part:
+ *   1  aurora curtains          4  mist drifting over the water
+ *   2  stars and the moon       5  the swell, and the moon's path on it
+ *   3  shooting stars           6  lights on the far shore
+ * The sky is drawn above the horizon, then mirrored (darker, rippled) into the water below it, then the foreground goes
+ * over that: the cliff, bushes, a tree. Every half minute the figure stands, brushes down and sits again; now and then
+ * a cigarette. Turning a voice's knob makes them point at what you are changing. Fireflies drift over everything.
+ *
+ * The picture ends at SC_H; the knob panel (sk_ui.c) takes the rest. */
+
+#define SC_H 188                         /* the scene's height */
+#define SC_HZ 104                        /* the horizon */
+#define SC_PX 98                         /* where the figure sits (the hip) */
+#define SC_PY 138                        /* the cliff's top there */
+#define SC_EDGE 106                      /* the cliff's edge */
+
+static const uint8_t SC_COL[SK_NV] = {C_PINK, C_CYAN, C_YELLOW, C_EMBER, C_GREEN, C_ACC};     /* the voices' colours */
+static const int16_t SC_AIM[SK_NV][2] = {{70, 30}, {150, 38}, {196, 50}, {170, 100}, {60, 90}, {150, 150}};
+static const uint8_t SC_THEME[8] = {1, 0, 0, 0, 0, 1, 0, 1};      /* a biome's sky: 0 night, 1 dusk */
+
+enum { SV_SIT, SV_POINT, SV_TIDY, SV_SMOKE };
+
+static struct {
+    uint8_t init, st, aim;
+    uint8_t cnt[SK_NV];
+    uint32_t hit[SK_NV];                 /* when each voice last struck */
+    uint32_t t0, next, touch_t;
+    uint8_t refl[FB_PAL];
+} sc;
+static uint32_t sc_touch_n;              /* the UI bumps this (and sets sc_touch_v) when a voice's knob is turned */
+static uint8_t sc_touch_v;
+static int sc_e[SK_NV];                  /* what each voice shows now, 0..255 */
+
+static uint32_t sc_hash(uint32_t x)
+{
+    x ^= x >> 16;
+    x *= 2246822519u;
+    x ^= x >> 13;
+    x *= 3266489917u;
+    x ^= x >> 16;
+    return x;
+}
+static int sc_tri(int x)                 /* a triangle wave, 0..255 over 512 */
+{
+    x &= 511;
+    return x < 256 ? x : 511 - x;
+}
+static int sc_isqrt(int v)
+{
+    int r = 0, b = 1 << 14;
+    while (b > v)
+        b >>= 2;
+    for (; b; b >>= 2) {
+        if (v >= r + b) {
+            v -= r + b;
+            r = (r >> 1) + b;
+        } else
+            r >>= 1;
+    }
+    return r;
+}
+
+static void sc_theme(uint32_t biome)
+{
+    uint32_t i;
+    fb_theme(SC_THEME[biome & 7u]);
+    for (i = 0; i < FB_PAL; i++)
+        sc.refl[i] = (uint8_t)i;
+    for (i = 0; i < 6; i++)
+        sc.refl[C_S0 + i] = (uint8_t)(C_W5 - i);
+    sc.refl[C_MOON] = C_MOON2;
+    sc.refl[C_STAR] = C_STAR2;
+    sc.refl[C_F1] = C_F0;
+    sc.refl[C_F2] = C_F0;
+    sc.refl[C_F3] = C_F0;
+    sc.refl[C_MIST] = C_W0;
+}
+
+static void sc_update(uint32_t now)
+{
+    int v;
+    if (!sc.init) {
+        sc.init = 1;
+        sc.next = now + 30000u;
+        for (v = 0; v < SK_NV; v++) {
+            sc.hit[v] = now - 100000u;
+            sc.cnt[v] = sk_ui.cnt[v];
+        }
+    }
+    for (v = 0; v < SK_NV; v++) {
+        uint32_t age, dur;
+        int e, base;
+        if (sk_ui.cnt[v] != sc.cnt[v]) {
+            sc.cnt[v] = sk_ui.cnt[v];
+            sc.hit[v] = now;
+        }
+        age = now - sc.hit[v];
+        dur = 900u + (uint32_t)(sk_s.decay[v] + 6) * 260u;
+        e = age >= dur ? 0 : 255 - (int)(age * 255u / dur);
+        base = (sk_s.mute >> v) & 1 ? 0 : sk_s.level[v] * 40 / 100;
+        sc_e[v] = base + e * (255 - base) / 255;
+    }
+    {
+        static uint32_t seen;
+        if (seen != sc_touch_n) {
+            seen = sc_touch_n;
+            sc.touch_t = now;
+            sc.aim = sc_touch_v % SK_NV;
+            if (sc.st == SV_SIT || sc.st == SV_SMOKE || sc.st == SV_POINT) {
+                sc.st = SV_POINT;
+                sc.t0 = now;
+            }
+        }
+    }
+    switch (sc.st) {
+    case SV_POINT:
+        if (now - sc.touch_t > 1800u) {
+            sc.st = SV_SIT;
+            sc.t0 = now;
+        }
+        break;
+    case SV_TIDY:
+        if (now - sc.t0 > 3350u) {
+            sc.st = SV_SIT;
+            sc.next = now + 26000u + sc_hash(now) % 8000u;
+        }
+        break;
+    case SV_SMOKE:
+        if (now - sc.t0 > 8500u) {
+            sc.st = SV_SIT;
+            sc.next = now + 26000u + sc_hash(now) % 8000u;
+        }
+        break;
+    default:
+        if ((int32_t)(now - sc.next) >= 0) {
+            sc.st = (sc_hash(now) & 3u) == 0u ? SV_SMOKE : SV_TIDY;
+            sc.t0 = now;
+        }
+        break;
+    }
+}
+
+/* ------------------------------------------------------------------ sky --- */
+static void sc_sky(void)
+{
+    static const int EDGE[6] = {14, 32, 52, 70, 88, SC_HZ};
+    int i, y = 0;
+    for (i = 0; i < 6; i++) {
+        fb_rect(0, y, FB_W, EDGE[i] - y, (uint8_t)(C_S0 + i));
+        if (i < 5)
+            fb_checker(0, EDGE[i] - 3, FB_W, 3, (uint8_t)(C_S0 + i + 1));
+        y = EDGE[i];
+    }
+}
+
+static void sc_stars(uint32_t now)
+{
+    int i, e = sc_e[1];
+    for (i = 0; i < 44; i++) {
+        uint32_t k = sc_hash((uint32_t)i * 2654435761u + 0x51u);
+        int x = (int)(k % 236u) + 2, y = 3 + (int)((k >> 9) % 78u);
+        uint8_t c = ((k >> 20) & 3u) ? C_STAR2 : C_STAR;
+        if (((now >> 7) + (k >> 12)) % 29u == 0u)
+            c = C_STAR;
+        fb_pset(x, y, c);
+        if (e > 50 && i * 127 / 44 < sk_s.mac[0] + 20) {          /* a flash: a cross as large as the light */
+            int s = 1 + e / 90, d;
+            fb_pset(x, y, C_STAR);
+            for (d = 1; d <= s; d++) {
+                uint8_t cc = d == 1 ? C_STAR : C_STAR2;
+                fb_pset(x - d, y, cc);
+                fb_pset(x + d, y, cc);
+                fb_pset(x, y - d, cc);
+                fb_pset(x, y + d, cc);
+            }
+        }
+    }
+}
+
+static void sc_moon(void)
+{
+    int e = sc_e[1], cx = 172, cy = 46, R = 9, gl = 2 + e * 9 / 255, i, j, m = R + gl + 1;
+    for (j = -m; j <= m; j++)
+        for (i = -m; i <= m; i++) {
+            int d2 = i * i + j * j;
+            if (d2 > R * R && d2 <= (R + gl) * (R + gl) && ((i + j) & 1) == 0)
+                fb_pset(cx + i, cy + j, d2 < (R + gl / 2) * (R + gl / 2) ? C_S5 : C_S4);
+            else if (d2 <= R * R && (i - 3) * (i - 3) + (j + 1) * (j + 1) > (R - 1) * (R - 1))
+                fb_pset(cx + i, cy + j, C_MOON);
+        }
+}
+
+static void sc_aurora(uint32_t now)
+{
+    int x, e = sc_e[0];
+    if (e < 40)
+        return;
+    for (x = 4; x < 170; x += 2) {
+        int top = 8 + (sc_tri(x * 2 + (int)(now >> 5)) >> 4);
+        int len = 8 + (e * 36 >> 8) + (sc_tri(x * 3 - (int)(now >> 6)) >> 4), k;
+        uint8_t c0 = (x / 28) & 1 ? C_GREEN : C_PINK;
+        for (k = 0; k < len; k++) {
+            if (((k + (x >> 1)) & 1) == 0 && k < len / 3 * 2)
+                fb_pset(x, top + k, k < len / 3 ? c0 : C_ACC);
+            else if (((k + (x >> 1)) & 3) == 0)
+                fb_pset(x, top + k, C_S4);
+        }
+    }
+}
+
+static void sc_comet(uint32_t now)
+{
+    uint32_t age = now - sc.hit[2];
+    int p, hx, hy, t, n;
+    if (age > 1000u)
+        return;
+    p = (int)(age * 256u / 1000u);
+    hx = 232 - p * 150 / 256;
+    hy = 10 + p * 70 / 256;
+    n = 8 + sk_s.mac[0] / 12;
+    for (t = 0; t < n; t++) {
+        if (t > 6 && (t & 1))
+            continue;
+        fb_pset(hx + t * 2, hy - t, t < 2 ? C_STAR : C_YELLOW);
+    }
+}
+
+static void sc_mist(uint32_t now)
+{
+    int e = sc_e[4], y, band;
+    if (e < 20)
+        return;
+    for (band = 0; band < 3; band++) {
+        int y0 = SC_HZ - 22 + band * 7, h = 3 + e / 60, off = (int)(now >> (6 - band));
+        for (y = 0; y < h; y++) {
+            int x, ph = (off + band * 90) & 63;
+            for (x = (y + band) & 1; x < FB_W; x += 2)
+                if (sc_tri(x * 2 + ph * 3 + band * 70) > 150)
+                    fb_pset(x, y0 + y, C_MIST);
+        }
+    }
+}
+
+/* the far shore: a low ridge, the city or lighthouse lights */
+static void sc_shore(void)
+{
+    int x;
+    for (x = 0; x < FB_W; x++) {
+        int h = 3 + (int)(sc_hash((uint32_t)(x >> 3) + 0x77u) % 4u) + (x > 118 ? 0 : 3);
+        fb_rect(x, SC_HZ - h, 1, h, C_F1);
+        if ((x & 3) == 0)
+            fb_pset(x, SC_HZ - h, C_F2);
+    }
+}
+
+static void sc_lights(uint32_t now)
+{
+    int e = sc_e[3], i;
+    for (i = 0; i < 16; i++) {
+        int x = 124 + i * 7 + (int)(sc_hash((uint32_t)i + 9u) % 4u), on = e > 50 && i * 127 / 16 < sk_s.mac[0] + 30;
+        uint8_t c = (i & 3) == 0 ? C_CYAN : ((i & 1) ? C_YELLOW : C_EMBER);
+        if (on || ((now >> 9) + (uint32_t)i) % 13u == 0u)
+            fb_pset(x, SC_HZ - 4 - (int)(sc_hash((uint32_t)i * 5u) % 3u), on ? c : C_STAR2);
+    }
+}
+static void sc_arm(int sx, int sy, int tx, int ty, uint8_t c)
+{
+    fb_line(sx, sy, tx, ty, c);
+    fb_line(sx + 1, sy, tx + 1, ty, c);
+}
+
+/* a ember-lit cigarette's smoke rising from (ex, ey) */
+static void sc_smoke(int ex, int ey, uint32_t now, int n)
+{
+    int i;
+    for (i = 0; i < n; i++) {
+        int ph = (int)((now / 90u + (uint32_t)i * 13u) % 40u);
+        int x = ex - ph / 3 + ((sc_tri(ph * 9 + i * 50) - 128) >> 5), y = ey - ph;
+        if (ph < 34) {
+            fb_pset(x, y, ph < 20 ? C_MIST : C_F3);
+            if (ph > 10)
+                fb_pset(x + 1, y, C_F3);
+        }
+    }
+}
+
+static void sc_figure(uint32_t now)
+{
+    int px = SC_PX, py = SC_PY, age = (int)(now - sc.t0), i;
+    int cx = px - 7, fl = sc_tri((int)(now >> 4)) >> 7;       /* the scarf's flutter, 0..1 */
+    if (sc.st == SV_TIDY && age >= 250 && age < 3050) {      /* standing */
+        int sw = age >= 650 && age < 2450;
+        fb_rect(cx - 3, py - 10, 3, 10, C_F0);
+        fb_rect(cx + 1, py - 10, 3, 10, C_F0);
+        fb_rect(cx - 3, py - 22, 7, 12, C_F0);
+        fb_rect(cx - 3, py - 28, 6, 6, C_F0);
+        fb_vline(cx + 3, py - 21, 10, C_F3);
+        fb_vline(cx + 2, py - 27, 4, C_F3);
+        fb_pset(cx + 1, py - 25, C_MOON);
+        fb_hline(cx - 3, py - 22, 7, C_SCARF);
+        for (i = 1; i < 5; i++)
+            fb_pset(cx - 3 - i, py - 21 + fl + (i >> 1), C_SCARF);
+        if (sw) {
+            int t = (age - 650) % 600, hy = py - 19 + t * 13 / 600;
+            sc_arm(cx + 1, py - 20, cx + 4, hy, C_F1);
+            for (i = 0; i < 5; i++) {
+                int ph = (age / 6 + i * 17) % 30;
+                fb_pset(cx + 5 + (i & 1) * 2, py - 14 + ph, ph < 20 ? C_MIST : C_F3);
+            }
+        } else
+            sc_arm(cx + 1, py - 20, cx + 2, py - 9, C_F1);
+        return;
+    }
+    if (sc.st == SV_TIDY && ((age >= 0 && age < 250) || (age >= 3050 && age < 3350))) {   /* half up */
+        fb_rect(cx - 3, py - 7, 7, 7, C_F0);
+        fb_rect(cx - 3, py - 19, 7, 12, C_F0);
+        fb_rect(cx - 3, py - 25, 6, 6, C_F0);
+        fb_vline(cx + 3, py - 18, 10, C_F3);
+        fb_vline(cx + 2, py - 24, 4, C_F3);
+        fb_pset(cx + 1, py - 22, C_MOON);
+        fb_hline(cx - 3, py - 19, 7, C_SCARF);
+        return;
+    }
+    /* sitting */
+    fb_rect(px - 2, py - 3, 10, 3, C_F0);                         /* the thigh */
+    fb_hline(px - 1, py - 3, 8, C_F3);
+    fb_rect(px + 6, py - 1, 3, 9, C_F0);                          /* the leg over the edge */
+    fb_rect(px + 6, py + 7, 5, 2, C_F0);
+    fb_pset(px + 10, py + 7, C_F3);
+    fb_rect(px - 4, py - 14, 6, 12, C_F0);                        /* the back and chest */
+    fb_vline(px + 1, py - 13, 10, C_F3);
+    fb_rect(px - 3, py - 20, 6, 6, C_F0);                         /* the head */
+    fb_vline(px + 2, py - 19, 4, C_F3);
+    fb_hline(px - 2, py - 20, 4, C_F2);
+    {
+        int up = sc.st == SV_POINT && SC_AIM[sc.aim][1] < 80;
+        fb_pset(px + 1, py - (up ? 18 : 17), C_MOON);               /* the eye: he looks up for the high things */
+    }
+    fb_hline(px - 3, py - 14, 6, C_SCARF);                           /* the scarf */
+    for (i = 1; i < 6; i++)
+        fb_pset(px - 4 - i, py - 13 + fl + (i >> 1), C_SCARF);
+    if (sc.st == SV_POINT) {
+        int dx = SC_AIM[sc.aim][0] - (px + 1), dy = SC_AIM[sc.aim][1] - (py - 11);
+        int m = (dx < 0 ? -dx : dx) > (dy < 0 ? -dy : dy) ? (dx < 0 ? -dx : dx) : (dy < 0 ? -dy : dy);
+        int ux = dx * 12 / m, uy = dy * 12 / m, bob = sc_tri(age * 2) >> 7;
+        sc_arm(px, py - 11, px + ux, py - 11 + uy - bob, C_F1);
+        fb_rect(px + ux, py - 11 + uy - bob - 1, 2, 2, C_MOON);
+    } else if (sc.st == SV_SMOKE) {
+        int ex, ey;
+        if (age < 600 || (age >= 600 && age < 1900)) {          /* the hand at the mouth */
+            int ember = age < 300 ? 0 : (age < 600 ? 1 : 2);
+            sc_arm(px, py - 11, px + 3, py - 15, C_F1);
+            fb_rect(px + 3, py - 17, 2, 2, C_MOON2);
+            fb_hline(px + 4, py - 16, 3, C_MOON);
+            ex = px + 7;
+            ey = py - 16;
+            if (age < 300 && (age / 60) & 1)
+                fb_rect(ex - 1, ey - 2, 2, 2, C_EMBER);              /* the lighter's flame */
+            if (ember >= 1)
+                fb_pset(ex, ey, C_EMBER);
+            if (ember == 2 && age > 700) {
+                fb_checker(ex - 2, ey - 2, 5, 5, C_EMBER);
+                fb_pset(ex, ey, C_EMBER);
+            }
+            sc_smoke(ex, ey - 1, now, age > 600 ? 4 : 0);
+        } else {                                                /* the hand rests, the cigarette still burning */
+            sc_arm(px, py - 11, px + 5, py - 5, C_F1);
+            ex = px + 8;
+            ey = py - 6;
+            fb_hline(px + 6, py - 6, 2, C_MOON);
+            fb_pset(ex, ey, ((now >> 8) & 7u) < 5u ? C_EMBER : C_F3);
+            sc_smoke(ex, ey - 1, now, age < 2500 ? 7 : 3);
+        }
+    } else
+        sc_arm(px - 1, py - 11, px + 4, py - 4, C_F1);          /* the arm on the knee */
+}
+
+
+/* pops of colour: a soft glow, brighter with p (0..255) */
+static void sc_glow(int x, int y, uint8_t c, int p)
+{
+    if (p < 40)
+        return;
+    fb_pset(x, y, c);
+    if (p > 110) {
+        fb_pset(x + 1, y, c);
+        fb_pset(x, y + 1, c);
+    }
+    if (p > 200) {
+        fb_pset(x - 1, y, c);
+        fb_pset(x, y - 1, c);
+        fb_pset(x + 2, y + 1, c);
+        fb_pset(x + 1, y + 2, c);
+    }
+}
+
+static void sc_fireflies(uint32_t now)
+{
+    static const uint8_t FC[8] = {C_EMBER, C_PINK, C_EMBER, C_EMBER, C_PINK, C_EMBER, C_YELLOW, C_EMBER};
+    int i, v;
+    for (i = 0; i < 18; i++) {
+        uint32_t k = sc_hash((uint32_t)i * 7919u + 0x2Bu);
+        int bx = (int)(k % 236u) + 2, by = 80 + (int)((k >> 8) % 104u);
+        int x = bx + ((sc_tri((int)(now >> 5) + (int)(k >> 16)) - 128) >> 3);
+        int y = by + ((sc_tri((int)(now >> 6) + (int)(k >> 20) * 3) - 128) >> 4) - (int)((now >> 8) + (k >> 4)) % 14u;
+        int p = sc_tri((int)(now >> 2) + (int)(k >> 9));
+        if (x > 82 && x < 112 && y > 110 && y < 150)
+            continue;                                       /* (not over the figure) */
+        sc_glow(x, y, FC[i & 7], p);
+    }
+    for (v = 0; v < SK_NV; v++) {                           /* embers of a voice's colour where it struck */
+        uint32_t age = now - sc.hit[v];
+        int k;
+        if (age > 1600u)
+            continue;
+        for (k = 0; k < 4; k++) {
+            uint32_t h = sc_hash((uint32_t)(v * 31 + k) * 2654435761u + sc.cnt[v]);
+            int x = SC_AIM[v][0] + (int)(h % 25u) - 12 + ((sc_tri((int)(age >> 2) + k * 90) - 128) >> 4);
+            int y = SC_AIM[v][1] - (int)(age >> 4) - k * 4;
+            if (y > 0 && y < SC_H)
+                sc_glow(x, y, SC_COL[v], 255 - (int)(age * 255u / 1600u));
+        }
+    }
+}
+
+/* the sky mirrored into the water: darker, rippled, wider ripples with depth */
+static void sc_reflect(uint32_t now)
+{
+    int y;
+    for (y = SC_HZ; y < SC_H; y++) {
+        int d = y - SC_HZ, sy = SC_HZ - 1 - d, dx, x;
+        uint8_t *dst = fb + y * FB_W;
+        const uint8_t *src;
+        if (sy < 0) {
+            fb_rect(0, y, FB_W, SC_H - y, C_W5);
+            break;
+        }
+        src = fb + sy * FB_W;
+        dx = ((sc_tri(d * 13 + (int)(now >> 4)) - 128) * (1 + d / 10)) >> 6;
+        for (x = 0; x < FB_W; x++) {
+            int sx = x + dx;
+            uint8_t c;
+            sx = sx < 0 ? 0 : (sx >= FB_W ? FB_W - 1 : sx);
+            c = sc.refl[src[sx] & (FB_PAL - 1)];
+            if ((c == C_MOON2 || c == C_STAR2) && ((x + y) & 1))
+                c = C_W2;
+            dst[x] = c;
+        }
+    }
+}
+
+static void sc_water(uint32_t now)
+{
+    int y, r, e5 = sc_e[5], e1 = sc_e[1];
+    /* the swell: rows of dashes, wider near us, lifting with the sub */
+    for (r = 0; r < 14; r++) {
+        int py = SC_HZ + 3 + r * r / 3 + r * 2, len = 3 + r / 2, gap = 9 + r, per = len + gap, x;
+        int off = (int)((now >> 6) * (uint32_t)(1 + r / 3)) % per;
+        uint8_t c = e5 > 110 ? C_W0 : C_W1;
+        if (py >= SC_H)
+            break;
+        for (x = -off + (r * 7) % per; x < FB_W; x += per) {
+            int yo = (sc_tri(x * 2 + (int)(now >> 3)) * (e5 >> 5)) >> 9;
+            fb_hline(x, py + yo, len, c);
+        }
+    }
+    /* the moon's path, breaking up into glints */
+    for (y = SC_HZ + 2; y < SC_H; y += 2) {
+        int dp = y - SC_HZ, w = 2 + dp / 6 + (e1 >> 6);
+        int wob = ((sc_tri((y << 3) + (int)(now >> 4)) - 128) * (3 + dp / 20)) >> 7;
+        if (sc_hash((uint32_t)y * 13u + (now >> 8)) % 5u != 0u)
+            fb_hline(172 + wob - w / 2, y, w, e1 > 150 ? C_MOON : C_MOON2);
+    }
+    /* the far lights' streaks, ripples from the sub's strikes */
+    {
+        int i, e3 = sc_e[3];
+        uint32_t age = now - sc.hit[5];
+        int k;
+        for (i = 0; i < 16; i++) {
+            int x = 124 + i * 7 + (int)(sc_hash((uint32_t)i + 9u) % 4u);
+            if (e3 > 50 && i * 127 / 16 < sk_s.mac[0] + 30)
+                fb_vline(x, SC_HZ + 1, 2 + e3 / 60, (i & 3) == 0 ? C_CYAN : ((i & 1) ? C_YELLOW : C_EMBER));
+        }
+        for (k = 0; k < 3; k++) {
+            int a = (int)age - k * 350, rr, x;
+            if (a <= 0 || a > 2600)
+                continue;
+            rr = a / 14;
+            if (rr > 70)
+                continue;
+            for (x = -rr; x <= rr; x++) {
+                int yy = 160 + sc_isqrt(rr * rr - x * x) / 4;
+                int y2 = 160 - sc_isqrt(rr * rr - x * x) / 4;
+                if ((x + rr) & 1)
+                    continue;
+                if (yy < SC_H) {
+                    fb_pset(150 + x, yy, k == 0 ? C_W0 : C_W1);
+                    fb_pset(150 + x, y2, k == 0 ? C_W0 : C_W1);
+                }
+            }
+        }
+    }
+}
+
+/* the foreground: the cliff the figure sits on, bushes, a tree on the far side of the bay */
+static void sc_bush(int cx, int base, int w, int h, uint32_t seed)
+{
+    int x;
+    for (x = -w; x <= w; x++) {
+        int hh = h - (x * x * h) / (w * w + 1) + (int)(sc_hash(seed + (uint32_t)(x >> 1)) % 3u);
+        if (hh > 0) {
+            fb_rect(cx + x, base - hh, 1, hh, C_F0);
+            if ((x & 3) == 0)
+                fb_pset(cx + x, base - hh, C_F2);
+        }
+    }
+}
+
+static void sc_foreground(void)
+{
+    int x;
+    for (x = 0; x < SC_EDGE; x++) {
+        uint32_t k = sc_hash((uint32_t)(x >> 2) + 0x61u);
+        int ty = SC_PY + (x < 30 ? (30 - x) / 3 : 0) + (int)(k % 3u);
+        fb_rect(x, ty, 1, SC_H - ty, C_F0);
+        fb_pset(x, ty, C_F2);
+        if ((k >> 8) % 5u == 0u)
+            fb_pset(x, ty - 1, C_F1);                    /* tufts of grass */
+    }
+    fb_rect(SC_EDGE, SC_PY + 1, 2, SC_H - SC_PY - 1, C_F2);       /* the rim of the face */
+    fb_vline(SC_EDGE + 2, SC_PY + 6, 34, C_F1);
+    fb_checker(40, SC_PY + 12, 66, 36, C_F1);                      /* the face in shadow */
+    fb_checker(SC_EDGE - 14, SC_PY + 28, 14, 10, C_F2);            /* a few lit ledges */
+    sc_bush(14, SC_PY + 8, 22, 14, 0x31u);
+    sc_bush(42, SC_PY + 3, 12, 8, 0x41u);
+    /* the far side of the bay, bottom right */
+    sc_bush(186, SC_H, 30, 14, 0x51u);
+    sc_bush(228, SC_H, 22, 22, 0x61u);
+    fb_rect(214, 122, 3, SC_H - 122, C_F0);                       /* the tree: trunk, a branch, the crown in clumps */
+    fb_line(215, 140, 200, 126, C_F0);
+    fb_line(215, 134, 232, 120, C_F0);
+    sc_bush(200, 128, 12, 9, 0x71u);
+    sc_bush(232, 122, 10, 8, 0x72u);
+    sc_bush(216, 116, 14, 10, 0x73u);
+    fb_checker(204, 108, 24, 8, C_F1);
+}
+
+static void sc_draw(uint32_t now)
+{
+    fb_unclip();
+    sc_sky();
+    sc_aurora(now);
+    sc_stars(now);
+    sc_moon();
+    sc_comet(now);
+    sc_shore();
+    sc_lights(now);
+    sc_mist(now);
+    sc_reflect(now);
+    sc_water(now);
+    sc_foreground();
+    sc_figure(now);
+    sc_fireflies(now);
+}
