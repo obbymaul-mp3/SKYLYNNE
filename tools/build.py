@@ -332,14 +332,18 @@ def check(img, syms, dis, rt):
         errors.append(f".ram_text contains calls: {rt_calls[:3]}")
     else:
         notes.append(f".ram_text: {len([ln for ln in rt.splitlines() if LINE.match(ln)])} insns, no calls")
+    fn = "?"
     for ln in dis.splitlines():     # nothing may call or load an address in the chip ROM
+        mf = re.match(r"^[0-9a-f]+ <([^>]+)>:", ln)
+        if mf:
+            fn = mf.group(1)
         mm = LINE.match(ln)
         if not mm:
             continue
         for v in re.findall(r"= (-?\d+) <|call -?\d+ <[^:>]*: ([0-9a-f]+) >", mm.group(3)):
             val = (int(v[0]) & 0xFFFFFFFF) if v[0] else int(v[1], 16) & 0xFFFFFFFF
             if 0xFFC00000 <= val < 0xFFD00000:
-                errors.append(f"reference to ROM address {val:#010x}")
+                errors.append(f"reference to ROM address {val:#010x} in {fn}: {ln.strip()[:90]}")
     if len(img) - STUB_LEN > XIP_LEN:
         errors.append(f"the app is {len(img) - STUB_LEN} B, the room below the marker's sector is {XIP_LEN} B")
 
