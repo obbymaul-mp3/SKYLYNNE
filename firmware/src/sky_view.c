@@ -388,6 +388,53 @@ static void skyv_figure(uint32_t now)
         skyv_arm(px - 1, py - 11, px + 4, py - 4, 57);          /* the arm on the knee */
 }
 
+/* pops of colour: fireflies drifting over the whole scene, and embers in a voice's colour rising where it struck */
+static void skyv_glow(int x, int y, uint8_t c, int p)         /* p: 0..255 */
+{
+    if (p < 40)
+        return;
+    fb_pset(x, y, c);
+    if (p > 110) {
+        fb_pset(x + 1, y, c);
+        fb_pset(x, y + 1, c);
+    }
+    if (p > 200) {                                          /* at its brightest a small cross of light round it */
+        fb_pset(x - 1, y, c);
+        fb_pset(x, y - 1, c);
+        fb_pset(x + 2, y + 1, c);
+        fb_pset(x + 1, y + 2, c);
+    }
+}
+
+static void skyv_fireflies(uint32_t now)
+{
+    static const uint8_t FC[8] = {62, 60, 62, 62, 60, 62, 61, 62};
+    int i, v;
+    for (i = 0; i < 16; i++) {
+        uint32_t k = fl_hash32((uint32_t)i * 7919u + 0x2Bu);
+        int bx = (int)(k % 236u) + 2, by = SKYV_Y0 + 70 + (int)((k >> 8) % 112u);
+        int x = bx + ((skyv_tri((int)(now >> 5) + (int)(k >> 16)) - 128) >> 3);
+        int y = by + ((skyv_tri((int)(now >> 6) + (int)(k >> 20) * 3) - 128) >> 4) - (int)((now >> 8) + (k >> 4)) % 14u;
+        int p = skyv_tri((int)(now >> 2) + (int)(k >> 9));
+        if (x > 86 && x < 114 && y > 108 && y < 172)
+            continue;                                       /* (not over him) */
+        skyv_glow(x, y, FC[i & 7], p);
+    }
+    for (v = 0; v < SKY_NV; v++) {
+        uint32_t age = now - skyv.hit[v];
+        int k;
+        if (age > 1600u)
+            continue;
+        for (k = 0; k < 4; k++) {
+            uint32_t h = fl_hash32((uint32_t)(v * 31 + k) * 2654435761u + skyv.cnt[v]);
+            int x = SKYV_AIM[v][0] + (int)(h % 25u) - 12 + ((skyv_tri((int)(age >> 2) + k * 90) - 128) >> 4);
+            int y = SKYV_AIM[v][1] - (int)(age >> 4) - k * 4;
+            if (y > SKYV_Y0 && y < SKYV_Y1)
+                skyv_glow(x, y, SKYV_COL[v] == 53 || SKYV_COL[v] == 54 ? 62 : SKYV_COL[v], 255 - (int)(age * 255u / 1600u));
+        }
+    }
+}
+
 static void skyv_hud(void)
 {
     char t[24];
@@ -415,5 +462,6 @@ static void draw_sky_home(void)
     skyv_lights(now);
     skyv_cliff(now);
     skyv_figure(now);
+    skyv_fireflies(now);
     skyv_hud();
 }
