@@ -61,7 +61,7 @@ static void sk_space(void)
     rt = rt < 0 ? 0 : rt > 31 ? 31 : rt;
     g0 = SK_RVG[rt];
     for (i = 0; i < SK_RVN; i++)                                       /* each line's share of the time */
-        sk_f.g[i] = 32767 - (int32_t)(((int64_t)(32767 - g0) * SK_RVL[i]) / 2400);
+        sk_f.g[i] = 32767 - ((32767 - g0) * (int32_t)SK_RVL[i]) / 2400;
     sk_f.damp = 26000 - (int32_t)sk_s.mac[2] * 120;                    /* COLOUR also opens the room's top */
     sk_f.wet = 2600 + (int32_t)s * 120;                                /* 0.08 .. 0.5 */
     sk_f.in = 7000;
