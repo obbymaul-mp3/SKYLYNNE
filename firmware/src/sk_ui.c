@@ -37,6 +37,7 @@ static struct {
     uint8_t page, biome;
     uint32_t pop_t, hud_t, k_t[4];       /* when the biome's name, the voice HUD, a knob was last touched */
     uint32_t held;
+    uint8_t intro;                       /* 1 while the opening plays */
     uint8_t slot, act;                   /* the SAVE page: the slot (0..7) and what the button does (load, save, clear) */
     uint32_t toast_t;
     char toast[16];
@@ -210,6 +211,34 @@ static void ui_biome(uint32_t i, uint32_t now)
 
 static int ui_clamp(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
 
+/* the opening: begins at the next frame, ends by itself or at the first button, key or knob */
+static void ui_intro_start(void)
+{
+    ui.intro = 1;
+    sc_in.on = 1;
+    sc_in.started = 0;
+    sk_fade = 0;
+    sk_fade_to = 4096;
+}
+static void ui_intro_end(uint32_t now)
+{
+    if (!ui.intro)
+        return;
+    ui.intro = 0;
+    sc_in.on = 0;
+    sk_fade_to = 4096;
+    sc.st = SV_SIT;
+    sc.t0 = now;
+    sc.next = now + 30000u;
+}
+static int32_t ui_enc(uint32_t role)
+{
+    int32_t d = sk_in_enc(role);
+    if (d && ui.intro)
+        sc_in.t0 = sc_in.t0 - 100000u;                               /* a knob skips it: the end comes at the next frame */
+    return d;
+}
+
 static void ui_input(uint32_t now)
 {
     uint32_t held, pr, keys, kp, i;
@@ -218,6 +247,8 @@ static void ui_input(uint32_t now)
     keys = 0;
     kp = sk_in_keys(&keys);
     ui.held = held;
+    if (ui.intro && (pr || kp))
+        sc_in.t0 = sc_in.t0 - 100000u;                               /* skip: the end comes at the next frame */
     if (pr & (1u << SB_HOME))
         ui.page = PG_HOME;
     if (pr & (1u << SB_EDIT))
@@ -244,19 +275,19 @@ static void ui_input(uint32_t now)
     if (pr & ((1u << SB_OCTDN) | (1u << SB_OCTUP)))
         ui.hud_t = now;
     /* the voice and its kind */
-    d = sk_in_enc(SE_SELECT);
+    d = ui_enc(SE_SELECT);
     if (d) {
         sk_s.sel = (uint8_t)((sk_s.sel + SK_NV * 8u + (uint32_t)d) % SK_NV);
         ui.hud_t = now;
         ui_touch(sk_s.sel);
     }
-    d = sk_in_enc(SE_ALGO);
+    d = ui_enc(SE_ALGO);
     if (d) {
         sk_s.type[sk_s.sel] = (uint8_t)((sk_s.type[sk_s.sel] + VT_N * 8u + (uint32_t)d) % VT_N);
         ui.hud_t = now;
         ui_touch(sk_s.sel);
     }
-    d = sk_in_enc(SE_PRESET);
+    d = ui_enc(SE_PRESET);
     if (d) {
         if (ui.page == PG_PHYS)
             ph.sides = (uint8_t)ui_clamp(ph.sides + d, 3, 8);
@@ -265,7 +296,7 @@ static void ui_input(uint32_t now)
     }
     /* the four knobs */
     for (i = 0; i < 4u; i++) {
-        d = sk_in_enc(SE_K1 + i);
+        d = ui_enc(SE_K1 + i);
         if (!d)
             continue;
         ui.k_t[i] = now;
@@ -510,6 +541,23 @@ static void ui_hud(uint32_t now)
 
 static void ui_draw(uint32_t now)
 {
+    if (ui.intro) {
+        if (!sc_in.started) {
+            sc_in.started = 1;
+            sc_in.t0 = now;
+        }
+        sc_update(now);
+        if ((int)(now - sc_in.t0) >= SI_END) {
+            ui_intro_end(now);
+        } else {
+            int t = (int)(now - sc_in.t0);
+            sk_fade_to = t < 2500 ? 0u : 4096u;
+            sc_intro_draw(now);
+            fb_rect(0, SC_H, FB_W, FB_H - SC_H, C_BG);
+            sk_present();
+            return;
+        }
+    }
     sc_update(now);
     if (ui.page == PG_PHYS) {
         ph_update(now);

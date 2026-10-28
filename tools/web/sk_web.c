@@ -111,6 +111,7 @@ WEB_EXPORT void web_store_set(uint32_t n) { web_store_len = n > sizeof web_store
 WEB_EXPORT uint32_t web_store_len_get(void) { return web_store_len; }
 WEB_EXPORT uint32_t web_store_gen_get(void) { return web_store_gen; }
 
+WEB_EXPORT void web_intro(void) { ui_intro_start(); }          /* the opening: the page calls it for the instrument that plays */
 WEB_EXPORT void web_boot(void)
 {
     ui_init(0);

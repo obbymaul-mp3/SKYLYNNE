@@ -131,6 +131,8 @@ int main(int argc, char **argv)
         char *s = argv[a];
         if (!strncmp(s, "wait:", 5))
             run((uint32_t)atoi(s + 5));
+        else if (!strcmp(s, "intro"))
+            ui_intro_start();
         else if (!strncmp(s, "btn:", 4)) {
             int k;
             for (k = 0; k < SB_N; k++)

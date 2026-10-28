@@ -22,6 +22,7 @@ class Skylynne extends AudioWorkletProcessor {
         }
         this.storeGen = this.ex.web_store_gen_get();
         this.ex.web_boot();
+        this.ex.web_intro();
         if (m.master != null) this.ex.web_master(m.master | 0);
         this.port.postMessage({ type: "ready" });
       } catch (err) {

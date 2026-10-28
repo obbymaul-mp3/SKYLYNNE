@@ -270,6 +270,9 @@ static inline int32_t sk_soft(int32_t x)
     return x - ((x3 * 4855) >> 15);
 }
 
+/* the fade of the whole output (the intro brings the sound in): the level now and where it is going, Q12 */
+static uint32_t sk_fade = 4096, sk_fade_to = 4096;
+
 /* one block: the conductor, the voices, the room, the master */
 static void sk_render(int32_t *out, uint32_t n)
 {
@@ -283,6 +286,8 @@ static void sk_render(int32_t *out, uint32_t n)
     }
     sk_tick(n);
     sk_space();
+    if (sk_fade != sk_fade_to)                                          /* about 3 s from nothing to full */
+        sk_fade = sk_fade < sk_fade_to ? (sk_fade + 3u > sk_fade_to ? sk_fade_to : sk_fade + 3u) : (sk_fade < sk_fade_to + 3u ? sk_fade_to : sk_fade - 3u);
     for (i = 0; i < n; i++)
         l[i] = r[i] = rv[i] = gb[i] = wl[i] = wr[i] = 0;
     sk_voices(l, r, rv, gb, n);
@@ -305,6 +310,8 @@ static void sk_render(int32_t *out, uint32_t n)
         b = sk_f.mlow[1];
         a = (a * (int32_t)sk_f.master) >> 12;
         b = (b * (int32_t)sk_f.master) >> 12;
+        a = (a * (int32_t)sk_fade) >> 12;
+        b = (b * (int32_t)sk_fade) >> 12;
         out[2u * i] = sk_soft(a);
         out[2u * i + 1u] = sk_soft(b);
     }

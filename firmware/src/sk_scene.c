@@ -65,6 +65,21 @@ static int sc_isqrt(int v)
     return r;
 }
 
+/* the intro: at power-on the title hangs in the night sky, the camera pans down to the cliff, the figure walks in from the
+ * left smoking, flicks the cigarette out over the water and sits. Times in ms from the start. */
+#define SI_PAN0 3400
+#define SI_PAN1 6400
+#define SI_WALK0 5600
+#define SI_WALK1 9800
+#define SI_FLICK 10050                   /* the cigarette leaves his hand */
+#define SI_HALF 10350                    /* he starts to sit */
+#define SI_SEAT 10650
+#define SI_END 11600
+static struct {
+    uint8_t on, started;
+    uint32_t t0;
+} sc_in;
+
 static void sc_theme(uint32_t biome)
 {
     uint32_t i;
@@ -118,6 +133,8 @@ static void sc_update(uint32_t now)
             }
         }
     }
+    if (sc_in.on)
+        sc.next = now + 60000u;                         /* (no tidying up during the intro) */
     switch (sc.st) {
     case SV_POINT:
         if (now - sc.touch_t > 1800u) {
@@ -340,10 +357,13 @@ static void sc_smoke(int ex, int ey, uint32_t now, int n)
     }
 }
 
+static int sc_intro_fig(uint32_t now);
 static void sc_figure(uint32_t now)
 {
     int px = SC_PX, py = SC_PY, age = (int)(now - sc.t0), i;
     int cx = px - 7, fl = sc_tri((int)(now >> 4)) >> 7;       /* the scarf's flutter, 0..1 */
+    if (sc_in.on && sc_intro_fig(now))
+        return;
     if (sc.st == SV_TIDY && age >= 250 && age < 3050) {      /* standing */
         int sw = age >= 650 && age < 2450;
         fb_rect(cx - 3, py - 10, 3, 10, C_F0);
@@ -605,6 +625,7 @@ static void sc_foreground(void)
     fb_checker(204, 108, 24, 8, C_F1);
 }
 
+static void sc_intro_proj(uint32_t now);
 static void sc_draw(uint32_t now)
 {
     static uint8_t fadet;
@@ -624,4 +645,169 @@ static void sc_draw(uint32_t now)
     sc_foreground();
     sc_figure(now);
     sc_fireflies(now);
+    if (sc_in.on)
+        sc_intro_proj(now);
+}
+
+/* --------------------------------------------------------------- the intro --- */
+/* the figure while he is not yet sitting: 1 when this drew him (the sitting figure is then skipped) */
+static void sc_stand(int cx, int py, int step, uint32_t now, int arm)
+{
+    int fl = sc_tri((int)(now >> 4)) >> 7, la = step & 1, i;
+    fb_rect(cx - 3, py - 10 + la, 3, 10 - la, C_F0);                  /* the legs: one lifts, then the other */
+    fb_rect(cx + 1, py - 10 + (1 - la), 3, 10 - (1 - la), C_F0);
+    fb_rect(cx - 3, py - 22, 7, 12, C_F0);
+    fb_rect(cx - 3, py - 28, 6, 6, C_F0);
+    fb_vline(cx + 3, py - 21, 10, C_F3);
+    fb_vline(cx + 2, py - 27, 4, C_F3);
+    fb_pset(cx + 1, py - 25, C_MOON);
+    fb_hline(cx - 3, py - 22, 7, C_SCARF);
+    for (i = 1; i < 5; i++)
+        fb_pset(cx - 3 - i, py - 21 + fl + (i >> 1), C_SCARF);
+    (void)arm;
+}
+
+static int sc_intro_fig(uint32_t now)
+{
+    int t = (int)(now - sc_in.t0), cx, gy, step;
+    if (t < SI_WALK0)
+        return 1;                                                     /* not in view yet */
+    if (t >= SI_SEAT)
+        return 0;                                                     /* he sits: the usual figure */
+    if (t >= SI_HALF) {                                               /* half up, about to sit */
+        int px = SC_PX, py = SC_PY;
+        fb_rect(px - 10, py - 7, 7, 7, C_F0);
+        fb_rect(px - 10, py - 19, 7, 12, C_F0);
+        fb_rect(px - 10, py - 25, 6, 6, C_F0);
+        fb_vline(px - 4, py - 18, 10, C_F3);
+        fb_vline(px - 5, py - 24, 4, C_F3);
+        fb_pset(px - 6, py - 22, C_MOON);
+        fb_hline(px - 10, py - 19, 7, C_SCARF);
+        return 1;
+    }
+    cx = t >= SI_WALK1 ? SC_PX - 7 : -8 + (t - SI_WALK0) * (SC_PX - 7 + 8) / (SI_WALK1 - SI_WALK0);
+    gy = SC_PY + (cx < 30 ? (30 - cx) / 3 : 0) + 1;
+    step = t >= SI_WALK1 ? 0 : (t - SI_WALK0) / 170;
+    sc_stand(cx, gy, step, now, 0);
+    if (t < SI_FLICK) {
+        int tw = t - SI_WALK0, puff = (t < SI_WALK1 - 400 && (tw % 2300) < 800) || (t >= SI_WALK1 - 400 && t < SI_WALK1 + 250);
+        int ex, ey;
+        if (t >= SI_WALK1 + 250) {                                    /* the arm swings out and lets go */
+            sc_arm(cx + 1, gy - 20, cx + 9, gy - 22, C_F1);
+            ex = cx + 10;
+            ey = gy - 22;
+            fb_pset(ex, ey, C_EMBER);
+        } else if (puff) {                                            /* the hand at the mouth */
+            sc_arm(cx + 1, gy - 20, cx + 3, gy - 23, C_F1);
+            fb_hline(cx + 4, gy - 24, 3, C_MOON);
+            ex = cx + 7;
+            ey = gy - 24;
+            fb_pset(ex, ey, C_EMBER);
+            if (((tw / 200) & 1) == 0)
+                fb_checker(ex - 2, ey - 2, 5, 5, C_EMBER);
+        } else {                                                      /* the hand swings low, the end glowing */
+            int sw = ((sc_tri(tw / 2) - 128) >> 5);
+            sc_arm(cx + 1, gy - 20, cx + 3 + sw, gy - 10, C_F1);
+            ex = cx + 4 + sw;
+            ey = gy - 11;
+            fb_pset(ex, ey, ((now >> 8) & 7u) < 5u ? C_EMBER : C_F3);
+        }
+        sc_smoke(ex, ey - 1, now, 5);
+    } else
+        sc_arm(cx + 1, gy - 20, cx + 3, gy - 12, C_F1);               /* the arm comes back down */
+    return 1;
+}
+
+/* the cigarette flicked out over the water: an arc, an ember with a short tail, and a ring where it lands */
+static void sc_intro_proj(uint32_t now)
+{
+    int t = (int)(now - sc_in.t0) - SI_FLICK, k;
+    int x0 = SC_PX - 7 + 10, y0 = SC_PY + 1 - 22;
+    if (t < 0 || t > 1500)
+        return;
+    for (k = 0; k < 4; k++) {
+        int tt = t - k * 45;
+        int x, y;
+        if (tt < 0)
+            continue;
+        if (tt > 900)
+            tt = 900;
+        x = x0 + tt * 60 / 1000;
+        y = y0 - tt * 25 / 1000 + tt * tt * 40 / 1000000;
+        if (k == 0)
+            fb_rect(x, y, 2, 2, C_EMBER);
+        else if (t < 900)
+            fb_pset(x, y, k < 3 ? C_EMBER : C_F3);
+    }
+    if (t >= 900) {                                                   /* it lands: two rings widen and fade */
+        int a = t - 900, r = a / 40, xx, lx = x0 + 54, ly = y0 - 22 + 36 + 22 * 0;
+        ly = y0 + 11;
+        for (xx = -r; xx <= r; xx++) {
+            int yy = sc_isqrt(r * r - xx * xx) / 4;
+            if (((xx + r) & 1) == 0 && a < 1400) {
+                fb_pset(lx + xx, ly + yy, a < 700 ? C_MOON2 : C_W0);
+                fb_pset(lx + xx, ly - yy, a < 700 ? C_MOON2 : C_W0);
+            }
+        }
+        if (a < 150)
+            fb_pset(lx, ly, C_EMBER);                                 /* a last spark */
+    }
+}
+
+/* the title's sky, above the cliff: a dithered ramp from the night down to the sky's top colour, stars, the name */
+static void sc_intro_sky(int d, int p, uint32_t t)
+{
+    static const uint8_t BAYER[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
+    static const uint8_t RAMP[5] = {C_BG, C_F0, C_F1, C_F2, C_S0};
+    int y, x, i;
+    for (y = 0; y < d; y++) {
+        int wy = y + p, q = wy >= SC_H - 4 ? 63 : wy * 63 / (SC_H - 4), lv = q >> 4, fr = q & 15;
+        const uint8_t *bt = BAYER + (y & 3) * 4;
+        for (x = 0; x < FB_W; x++)
+            fb[y * FB_W + x] = bt[x & 3] < fr ? RAMP[lv + 1] : RAMP[lv];
+    }
+    fb_clip(0, 0, FB_W, d);
+    for (i = 0; i < 70; i++) {
+        uint32_t k = sc_hash((uint32_t)i * 2654435761u + 0x2Fu);
+        int sx = (int)(k % 238u) + 1, sy = 2 + (int)((k >> 9) % 180u) - p;
+        uint8_t c = ((k >> 20) & 3u) ? C_STAR2 : C_STAR;
+        if (((t >> 7) + (k >> 12)) % 31u == 0u)
+            c = C_STAR;
+        fb_pset(sx, sy, c);
+    }
+    {
+        static const uint8_t FADE[4] = {C_F3, C_S5, C_INK2, C_INK};
+        int a = (int)t - 400, b = (int)t - 1000, ca = a < 0 ? -1 : (a / 300 > 3 ? 3 : a / 300), cb = b < 0 ? -1 : (b / 300 > 3 ? 3 : b / 300);
+        if (ca >= 0)
+            fb_text2_c(FB_W / 2, 66 - p, "SKYLYNNE", FADE[ca], 4);
+        if (cb >= 0)
+            fb_text_c(FB_W / 2, 104 - p, "by Obby Maul", FADE[cb]);
+    }
+    fb_unclip();
+}
+
+/* one frame of the intro: the scene (with the walker) pushed down by the pan, and the title sky above it */
+static void sc_intro_draw(uint32_t now)
+{
+    int t = (int)(now - sc_in.t0), p, y, d;
+    sc_draw(now);
+    if (t < SI_PAN0)
+        p = 0;
+    else if (t >= SI_PAN1)
+        p = SC_H;
+    else {
+        int u = (t - SI_PAN0) * 256 / (SI_PAN1 - SI_PAN0);
+        p = SC_H * ((u * u * (768 - 2 * u)) >> 16) >> 8;
+    }
+    d = SC_H - p;
+    if (d > 0) {
+        for (y = SC_H - 1; y >= d; y--) {
+            const uint8_t *s = fb + (y - d) * FB_W;
+            uint8_t *dst = fb + y * FB_W;
+            int x;
+            for (x = 0; x < FB_W; x++)
+                dst[x] = s[x];
+        }
+        sc_intro_sky(d, p, (uint32_t)t);
+    }
 }

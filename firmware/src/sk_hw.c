@@ -270,6 +270,8 @@ static void sk_main(void)
     CR_STAGE_SET(BS_SOUNDS);
     ui_init(0);
     ui_store_load();                       /* (interrupts are still off: the flash is read bare) */
+    if (!sk_safe)
+        ui_intro_start();                  /* the opening: silent until it has panned down to the cliff */
     sk_s.bpm = SK_BIOMES[0].bpm;
     CR_STAGE_SET(BS_AUDIO);
     sk_master_boot();
@@ -285,7 +287,8 @@ static void sk_main(void)
     fm1_irq_enable_all();
     sk_live = 1;
     fm1_delay_ms(30);
-    sk_splash(sk_safe ? 2500u : 900u);
+    if (sk_safe)
+        sk_splash(2500u);
     for (;;) {
         uint32_t m = fm1_ms, left;
         fm1_wdt_feed();
