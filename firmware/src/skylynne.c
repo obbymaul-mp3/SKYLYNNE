@@ -28,6 +28,7 @@
 #include "fm1_audio.h"
 #include "fm1_adc.h"
 #include "fm1_lcd_hw.h"
+#include "fm1_flash.h"
 #include "sk_bootguard.h"
 
 #include "libc.c"

@@ -56,7 +56,7 @@ static struct {
 static void sk_space(void)
 {
     uint32_t s = sk_s.mac[3], i;
-    int rt = (int)sk_s.b->rv + ((int)s - 64) / 6;
+    int rt = (int)sk_s.b->rv + ((int)s - 64) / 6 + ((int)sk_s.fx[0] - 64) / 4;       /* ROOM: +-16 steps of the tail */
     int32_t g0;
     rt = rt < 0 ? 0 : rt > 31 ? 31 : rt;
     g0 = SK_RVG[rt];
@@ -65,9 +65,11 @@ static void sk_space(void)
     sk_f.damp = 26000 - (int32_t)sk_s.mac[2] * 120;                    /* COLOUR also opens the room's top */
     sk_f.wet = 2600 + (int32_t)s * 120;                                /* 0.08 .. 0.5 */
     sk_f.in = 7000;
-    sk_f.dfb = 9000 + (int32_t)s * 100;                                /* the echo's feedback: 0.27 .. 0.6 */
-    sk_f.dwet = (int32_t)s * 85;                                       /* 0 .. 0.33 */
-    sk_f.gwet = (int32_t)s * 150;
+    sk_f.dfb = (9000 + (int32_t)s * 100) * (64 + (int32_t)sk_s.fx[1]) / 128;   /* ECHO: the feedback 0.27 .. 0.6 */
+    if (sk_f.dfb > 24000)
+        sk_f.dfb = 24000;
+    sk_f.dwet = (int32_t)s * 85 * (int32_t)sk_s.fx[1] >> 6;            /* 0 .. 0.33, x0 .. x2 */
+    sk_f.gwet = (int32_t)s * 150 * (int32_t)sk_s.fx[2] >> 6;           /* CLOUD */
     {
         uint32_t n = sk_s.b->dl ? sk_s.b->dl : 1u, t = sk_c.steplen * n;
         while (t >= SK_DLN - 64u)
@@ -188,7 +190,7 @@ static uint32_t sk_grand(void)
 static void sk_grain_spawn(void)
 {
     uint32_t i, r = sk_grand();
-    uint32_t size = sk_s.b->gr, lay = sk_s.b->gl;
+    uint32_t size = (uint32_t)sk_clampi((int)sk_s.b->gr + ((int)sk_s.fx[2] - 64), 0, 127), lay = sk_s.b->gl;
     for (i = 0; i < SK_NG; i++) {
         sk_grain_t *g = &sk_f.gr[i];
         uint32_t pit, len, back, pan;
@@ -273,6 +275,7 @@ static void sk_render(int32_t *out, uint32_t n)
 {
     int32_t l[SK_CTL], r[SK_CTL], rv[SK_CTL], gb[SK_CTL], dl[SK_CTL], wl[SK_CTL], wr[SK_CTL];
     uint32_t i;
+    int32_t hc = 32767 - (int32_t)sk_s.fx[3] * 250;
     if (!sk_f.ready) {
         sk_f.ready = 1;
         sk_f.dcur = sk_f.dtgt = (int32_t)(sk_c.steplen << 8);
@@ -296,6 +299,10 @@ static void sk_render(int32_t *out, uint32_t n)
         sk_f.dc[1] += (b - sk_f.dc[1]) >> 10;
         a -= sk_f.dc[0];
         b -= sk_f.dc[1];
+        sk_f.mlow[0] += sk_q15(a - sk_f.mlow[0], hc);                  /* HIGH CUT: a one-pole low-pass over the whole mix */
+        sk_f.mlow[1] += sk_q15(b - sk_f.mlow[1], hc);
+        a = sk_f.mlow[0];
+        b = sk_f.mlow[1];
         a = (a * (int32_t)sk_f.master) >> 12;
         b = (b * (int32_t)sk_f.master) >> 12;
         out[2u * i] = sk_soft(a);

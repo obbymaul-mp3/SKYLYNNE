@@ -105,10 +105,15 @@
     draw(new Uint32Array(pre.memory.buffer, pre.web_fb(), 57600));
     leds(new Uint8Array(pre.memory.buffer, pre.web_leds(), 41));
   };
+  // the saved slots (the SAVE page) are kept in this browser
+  const STORE_KEY = "skylynne.slots.v1";
+  const readStore = () => { try { const t = localStorage.getItem(STORE_KEY); return t ? Uint8Array.from(atob(t), (c) => c.charCodeAt(0)) : null; } catch (e) { return null; } };
+  const writeStore = (b) => { try { localStorage.setItem(STORE_KEY, btoa(String.fromCharCode(...b))); } catch (e) { /* private window: slots last for this visit only */ } };
+  const loadStore = (ex) => { const b = readStore(); if (b && b.length) { new Uint8Array(ex.memory.buffer, ex.web_store_ptr(), b.length).set(b); ex.web_store_set(b.length); } };
   const bytes = fetch("skylynne.wasm").then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.arrayBuffer(); });
   bytes.then(async (wasm) => {
     const { instance } = await WebAssembly.instantiate(wasm, {});
-    pre = instance.exports; pre.web_boot();
+    pre = instance.exports; loadStore(pre); pre.web_boot();
     for (let i = 0; i < 16; i++) pre.web_render(1024);
     runPre();
     preTimer = setInterval(() => { for (let i = 0; i < 2; i++) pre.web_render(704); runPre(); }, 33);
@@ -125,11 +130,11 @@
       node.connect(ctx.destination);
       node.port.onmessage = (e) => {
         const m = e.data;
-        if (m.type === "frame") { if (m.fb) draw(m.fb); leds(m.leds); }
+        if (m.type === "frame") { if (m.fb) draw(m.fb); leds(m.leds); if (m.store) writeStore(m.store); }
         else if (m.type === "ready") { running = true; clearInterval(preTimer); $("start").hidden = true; $("status").textContent = ""; }
         else if (m.type === "error") $("status").textContent = "Error: " + m.message;
       };
-      node.port.postMessage({ type: "load", wasm, master: master(+$("master").value) });
+      node.port.postMessage({ type: "load", wasm, master: master(+$("master").value), store: readStore() });
       if (ctx.state !== "running") await ctx.resume();
     } catch (e) { $("status").textContent = "Couldn’t start the sound: " + e.message; $("startbtn").disabled = false; }
   });

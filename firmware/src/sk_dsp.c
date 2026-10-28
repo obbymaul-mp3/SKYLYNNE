@@ -33,6 +33,22 @@ static const char *const SK_TYPE_NAME[VT_N] = {"Drone", "Whistle", "Sub", "Pad",
 /* SUSTAIN -6..+6: the note's length times 2^(s/3) / 4 (Q8); the top step is endless */
 static const uint16_t SK_SUSM[13] = {64, 81, 102, 128, 161, 203, 256, 323, 406, 512, 645, 813, 1024};
 
+/* the scales the SCL page offers: name, notes, intervals */
+typedef struct { const char *name; uint8_t len, iv[8]; } sk_scale_t;
+#define SK_NSCALE 9u
+static const sk_scale_t SK_SCALES[SK_NSCALE] = {
+    {"Minor", 7, {0, 2, 3, 5, 7, 8, 10, 0}},
+    {"Dorian", 7, {0, 2, 3, 5, 7, 9, 10, 0}},
+    {"Phrygian", 7, {0, 1, 3, 5, 7, 8, 10, 0}},
+    {"Lydian", 7, {0, 2, 4, 6, 7, 9, 11, 0}},
+    {"Major", 7, {0, 2, 4, 5, 7, 9, 11, 0}},
+    {"Min Pent", 5, {0, 3, 5, 7, 10, 0, 0, 0}},
+    {"Maj Pent", 5, {0, 2, 4, 7, 9, 0, 0, 0}},
+    {"Hirajoshi", 5, {0, 2, 3, 7, 8, 0, 0, 0}},
+    {"Whole", 6, {0, 2, 4, 6, 8, 10, 0, 0}},
+};
+static const char *const SK_NOTE_NAME[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+
 /* one voice of a biome: what it is and how it plays */
 typedef struct {
     uint8_t type;                        /* the kind of voice */
@@ -73,6 +89,8 @@ typedef struct {
     uint8_t type;
     int8_t deg;
     int8_t panw;                                                       /* the pan's wander */
+    int8_t gli;                                                        /* the glide, -6..+6 */
+    uint8_t crv;                                                       /* the swell's curve, 0..127 */
 } sk_voice_t;
 
 #ifndef SK_POOL
@@ -94,6 +112,14 @@ static struct {
     uint8_t bpm;
     uint8_t sel;                         /* the voice the player is editing */
     uint8_t rot[SK_NV];                  /* the patterns' rotation (drifts with MOTION) */
+    uint8_t fx[4];                       /* FX page: ROOM, ECHO, CLOUD, HIGH CUT, 0..127 (64 is the biome's own) */
+    uint8_t scl, root, len;              /* SCL page: the scale (SK_NSCALE: a biome's own), the key, the notes */
+    uint8_t iv[8];
+    int8_t shift, walk;                  /* octaves -2..+2; the walk's reach -3..+3 */
+    uint8_t lfo[4];                      /* LFO page: RATE, DEPTH, PAN, VIBRATO, 0..127 */
+    int8_t atk[SK_NV], rel[SK_NV];       /* ENV page: the swell and the fade, -6..+6 */
+    int8_t gli[SK_NV];
+    uint8_t crv[SK_NV];
 } sk_s;
 
 static struct {
@@ -146,12 +172,15 @@ static void sk_pan(sk_voice_t *v, int pan)             /* -64 .. 63 -> the equal
 static void sk_start(sk_voice_t *v, uint32_t type, uint32_t note, uint32_t len, uint32_t vel, uint32_t hard,
                      uint32_t steplen)
 {
-    uint32_t k, att, rel, nn = note > 100u ? 100u : note, fresh = !v->act;
+    uint32_t k, att, rel, nn = note > 100u ? 100u : note, fresh = !v->act, vi = (uint32_t)(v - sk_v);
+    uint32_t lr = 32u + (uint32_t)sk_s.lfo[0] * 5u;                      /* the LFO rate, Q8 (x0.12 .. x3.1) */
     v->gate = len >= 900u ? SK_ENDLESS : len * steplen;
     att = v->gate / 3u;
-    att = att < 3000u ? 3000u : att > 260000u ? 260000u : att;          /* 0.07 .. 5.9 s */
+    att = (att * SK_SUSM[sk_s.atk[vi] + 6]) >> 8;                       /* ENV: x1/4 .. x4 */
+    att = att < 2000u ? 2000u : att > 900000u ? 900000u : att;          /* 0.05 .. 20 s */
     rel = v->gate / 2u;
-    rel = rel < 14000u ? 14000u : rel > 400000u ? 400000u : rel;        /* 0.3 .. 9 s */
+    rel = (rel * SK_SUSM[sk_s.rel[vi] + 6]) >> 8;
+    rel = rel < 8000u ? 8000u : rel > 1500000u ? 1500000u : rel;        /* 0.2 .. 34 s */
     v->astep = (int32_t)(8388352u / att);
     v->rstep = (int32_t)(8388352u / rel);
     v->tgt = 32767 << 8;
@@ -165,6 +194,8 @@ static void sk_start(sk_voice_t *v, uint32_t type, uint32_t note, uint32_t len, 
         v->lph[1] = sk_rand();
     }
     v->type = (uint8_t)type;
+    v->gli = sk_s.gli[vi];
+    v->crv = sk_s.crv[vi];
     switch (type) {
     case VT_DRONE: {
         static const uint32_t DET[4] = {64950, 65350, 65750, 66150};     /* about -15, -5, +5, +15 cents */
@@ -217,12 +248,24 @@ static void sk_start(sk_voice_t *v, uint32_t type, uint32_t note, uint32_t len, 
         v->linc[1] = 16000u + (sk_rand() & 16383u);
         break;
     }
+    v->linc[0] = (v->linc[0] * lr) >> 8;                                 /* the LFO page's rate */
+    v->linc[1] = (v->linc[1] * lr) >> 8;
     if (fresh)
         for (k = 0; k < 5u; k++) {
             v->inc[k] = v->tinc[k];
             v->ph[k] = sk_rand();
         }
     v->act = 1;
+}
+
+/* a note of voice i's register: scale degree deg (any integer; the scale repeats each octave) */
+static uint32_t sk_note_of(uint32_t i, int deg)
+{
+    int len = sk_s.len ? sk_s.len : 7;
+    int oct = deg >= 0 ? deg / len : -((-deg + len - 1) / len);
+    int in = deg - oct * len;
+    int nn = (int)sk_s.b->v[i].base + 12 * oct + sk_s.iv[in] + sk_s.root + 12 * sk_s.shift;
+    return (uint32_t)sk_clampi(nn, 12, 120);
 }
 
 /* the length of voice i's note in sixteenths, from its biome length and its SUSTAIN knob */
@@ -273,7 +316,9 @@ static void sk_step(void)
             continue;
         r >>= 8;
         deg = v->deg;
-        span = (int)b->len * (int)(c->span ? c->span : 2u) / 2;       /* the reach in notes, up and down */
+        span = (int)sk_s.len * (int)(c->span ? c->span : 2u) * (4 + sk_s.walk) / 8;   /* the reach in notes, up and down */
+        if (span < 1)
+            span = 1;
         if (((r >> 4) & 127u) < (mot >> 2))                           /* now and then a leap */
             deg = (int)((r >> 11) % (uint32_t)(span * 2 + 1)) - span;
         else
@@ -281,10 +326,7 @@ static void sk_step(void)
         deg = deg < -span ? -span : deg > span ? span : deg;
         v->deg = (int8_t)deg;
         {
-            int oct = deg >= 0 ? deg / (int)b->len : -((-deg + (int)b->len - 1) / (int)b->len);
-            int in = deg - oct * (int)b->len;
-            int nn = (int)c->base + 12 * oct + b->iv[in] + b->root;
-            note = (uint32_t)sk_clampi(nn, 12, 120);
+            note = sk_note_of(i, deg);
         }
         vel = (uint32_t)c->vel + ((r >> 16) & 15u) - 8u;              /* a little human */
         vel = vel * (uint32_t)sk_s.level[i] / 80u;
@@ -292,7 +334,7 @@ static void sk_step(void)
             vel = 127u;
         {
             int pw = (int)v->panw + (int)((r >> 20) % 5u) - 2;        /* the pan wanders with MOTION */
-            int lim = (int)(mot >> 1);
+            int lim = (int)(mot >> 1) * (int)sk_s.lfo[2] >> 6;
             v->panw = (int8_t)sk_clampi(pw, -lim, lim);
             sk_pan(v, sk_s.pan[i] + v->panw);
         }
@@ -301,16 +343,6 @@ static void sk_step(void)
         sk_ui.lit[i] = 255;
         sk_ui.cnt[i]++;
     }
-}
-
-/* a note of voice i's register: scale degree deg (any integer; the scale repeats each octave) */
-static uint32_t sk_note_of(uint32_t i, int deg)
-{
-    const sk_biome_t *b = sk_s.b;
-    int oct = deg >= 0 ? deg / (int)b->len : -((-deg + (int)b->len - 1) / (int)b->len);
-    int in = deg - oct * (int)b->len;
-    int nn = (int)b->v[i].base + 12 * oct + b->iv[in] + b->root;
-    return (uint32_t)sk_clampi(nn, 12, 120);
 }
 
 /* start voice i now, from outside the conductor (the physics sequencer's balls): the voice's own sound and settings,
@@ -351,6 +383,8 @@ static void sk_load(const sk_biome_t *b)
         sk_s.sus[i] = 0;
         sk_s.tone[i] = 0;
         sk_s.rot[i] = 0;
+        sk_s.atk[i] = sk_s.rel[i] = sk_s.gli[i] = 0;
+        sk_s.crv[i] = 64;
         sk_s.level[i] = 80;
         sk_v[i].deg = 0;
         sk_v[i].panw = 0;
@@ -358,7 +392,35 @@ static void sk_load(const sk_biome_t *b)
             sk_v[i].nz = (int32_t)(0x2545F491u + i * 0x9E3779B1u);          /* (xorshift sticks at 0) */
     }
     sk_s.mute = 0;
+    sk_s.fx[0] = sk_s.fx[1] = sk_s.fx[2] = 64;
+    sk_s.fx[3] = 40;                                                  /* a gentle high cut: the top is soft by default */
+    sk_s.lfo[0] = 45;
+    sk_s.lfo[1] = sk_s.lfo[2] = sk_s.lfo[3] = 64;
+    sk_s.shift = sk_s.walk = 0;
+    sk_s.root = b->root;
+    sk_s.len = b->len;
+    sk_s.scl = SK_NSCALE;
+    for (i = 0; i < 8u; i++)
+        sk_s.iv[i] = b->iv[i];
+    for (i = 0; i < SK_NSCALE; i++) {
+        uint32_t k, same = SK_SCALES[i].len == b->len;
+        for (k = 0; same && k < b->len; k++)
+            same = SK_SCALES[i].iv[k] == b->iv[k];
+        if (same)
+            sk_s.scl = (uint8_t)i;
+    }
     sk_steplen_set();
+}
+
+/* the SCL page's scale: copy a table scale in (the voices' degrees stay, so the melody keeps its shape) */
+static void sk_scale_set(uint32_t i)
+{
+    uint32_t k;
+    i %= SK_NSCALE;
+    sk_s.scl = (uint8_t)i;
+    sk_s.len = SK_SCALES[i].len;
+    for (k = 0; k < 8u; k++)
+        sk_s.iv[k] = SK_SCALES[i].iv[k];
 }
 
 /* the top of every block: the conductor's clock */
@@ -401,8 +463,11 @@ static int32_t sk_swell(sk_voice_t *v, uint32_t n, int32_t *g0, int32_t *dg)
             v->amp = v->tgt;
     }
     a1 = v->amp >> 8;
-    g1 = (a1 * a1) >> 15;
-    *g0 = ((a0 * a0) >> 15) << 8;
+    {
+        int32_t c = (int32_t)v->crv, q1 = (a1 * a1) >> 15, q0 = (a0 * a0) >> 15;   /* CURVE: 0 straight .. 127 squared */
+        g1 = (a1 * (127 - c) + q1 * c) / 127;
+        *g0 = ((a0 * (127 - c) + q0 * c) / 127) << 8;
+    }
     *dg = ((g1 << 8) - *g0) / (int32_t)n;
     if (!v->tgt && !v->amp)
         v->act = 0;
@@ -412,21 +477,26 @@ static int32_t sk_swell(sk_voice_t *v, uint32_t n, int32_t *g0, int32_t *dg)
 static inline void sk_glide(sk_voice_t *v, uint32_t k, uint32_t sh)
 {
     int32_t d = (int32_t)(v->tinc[k] - v->inc[k]);
+    sh = (uint32_t)sk_clampi((int)sh - v->gli / 2 - (v->gli > 0 ? 1 : 0), 4, 15);
     v->inc[k] += (d >> sh) + (d > 0 ? 1 : d < 0 ? -1 : 0);
     if (d > -64 && d < 64)
         v->inc[k] = v->tinc[k];
 }
+
+/* the LFO page's DEPTH (64 is as designed, up to twice) on a slow movement */
+#define SK_LD(x) (((x) * (int32_t)sk_s.lfo[1]) >> 6)
 
 static void sk_run_drone(sk_voice_t *v, int32_t *o, uint32_t n)
 {
     int32_t g, dg, a, b, lpk, lp = v->lp, fb[4], pk = v->peak;
     uint32_t i, k, inc[5];
     sk_swell(v, n, &g, &dg);
-    a = SK_SIN[v->lph[0] >> 22];
-    b = SK_SIN[v->lph[1] >> 22];
+    a = SK_LD(SK_SIN[v->lph[0] >> 22]);
+    b = SK_LD(SK_SIN[v->lph[1] >> 22]);
     v->lph[0] += v->linc[0] * n;
     v->lph[1] += v->linc[1] * n;
     lpk = v->lpk + (int32_t)(((int64_t)(v->lpk >> 1) * b) >> 15);        /* the filter breathes: +-50% */
+    lpk = sk_clampi(lpk, 200, 32000);
     for (k = 0; k < 5u; k++) {
         int32_t dev;
         sk_glide(v, k, 10);
@@ -460,11 +530,12 @@ static void sk_run_pad(sk_voice_t *v, int32_t *o, uint32_t n)
     int32_t g, dg, a, b, lpk, lp = v->lp, fb[3], pk = v->peak;
     uint32_t i, k, inc[3];
     sk_swell(v, n, &g, &dg);
-    a = SK_SIN[v->lph[0] >> 22];
-    b = SK_SIN[v->lph[1] >> 22];
+    a = SK_LD(SK_SIN[v->lph[0] >> 22]);
+    b = SK_LD(SK_SIN[v->lph[1] >> 22]);
     v->lph[0] += v->linc[0] * n;
     v->lph[1] += v->linc[1] * n;
     lpk = v->lpk + (int32_t)(((int64_t)(v->lpk >> 2) * b) >> 15);
+    lpk = sk_clampi(lpk, 200, 32000);
     for (k = 0; k < 3u; k++) {
         sk_glide(v, k, 9);
         inc[k] = v->inc[k] + (uint32_t)(((int32_t)(v->inc[k] >> 14) * (k == 1u ? b : (k == 0u ? a : -a))) >> 10);
@@ -493,7 +564,7 @@ static void sk_run_sub(sk_voice_t *v, int32_t *o, uint32_t n)
     int32_t g, dg, a, pk = v->peak;
     uint32_t i, i0, i1;
     sk_swell(v, n, &g, &dg);
-    a = SK_SIN[v->lph[0] >> 22];
+    a = SK_LD(SK_SIN[v->lph[0] >> 22]);
     v->lph[0] += v->linc[0] * n;
     sk_glide(v, 0, 11);
     sk_glide(v, 1, 11);
@@ -520,6 +591,7 @@ static void sk_run_whistle(sk_voice_t *v, int32_t *o, uint32_t n)
         v->lph[1] += v->linc[1] * n;
         depth = (depth * (v->amp >> 8)) >> 15;                         /* and grows with the swell */
         vib = (vib * depth) >> 15;
+        vib = (vib * (int32_t)sk_s.lfo[3]) >> 6;                       /* the VIBRATO knob */
     }
     sk_glide(v, 0, 9);
     inc = v->inc[0] + (uint32_t)(((int32_t)(v->inc[0] >> 14) * vib) >> 8);      /* +-0.8% at most */
@@ -546,8 +618,8 @@ static void sk_run_air(sk_voice_t *v, int32_t *o, uint32_t n)
     int32_t bp0 = v->bp, lo0 = v->lo, bp1 = v->bp2, lo1 = v->lo2;
     uint32_t i;
     sk_swell(v, n, &g, &dg);
-    a = SK_SIN[v->lph[0] >> 22];
-    b = SK_SIN[v->lph[1] >> 22];
+    a = SK_LD(SK_SIN[v->lph[0] >> 22]);
+    b = SK_LD(SK_SIN[v->lph[1] >> 22]);
     v->lph[0] += v->linc[0] * n;
     v->lph[1] += v->linc[1] * n;
     f0 = v->f1 + (int32_t)(((int64_t)(v->f1 >> 3) * a) >> 15);           /* the bands drift: +-12% */

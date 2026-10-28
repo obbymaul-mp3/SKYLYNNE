@@ -8,7 +8,12 @@
  *   PRESETS     the biome: a whole soundscape with its scale, tempo and room
  *   EDIT        the voice page: K1..K4 become LEVEL  PAN  SUSTAIN  TONE
  *   SEQ         the physics page: K1..K4 become SPIN  GRAVITY  BOUNCE  BALLS, PRESETS the shape's sides
- *   HOME        back to the scene
+ *   FX          the room: ROOM  ECHO  CLOUD  HI CUT (a soft top end, the cure for a harsh mix)
+ *   SCL         the music: ROOT  SCALE  OCTAVE  WALK (how far the voices wander)
+ *   ENV         the selected voice's swell: ATTACK  RELEASE  GLIDE  CURVE
+ *   LFO         the slow drifts of every voice: RATE  DEPTH  PAN  VIB
+ *   SAVE        eight slots in the flash: K1 slot, K2 load / save / clear, SAVE again does it
+ *   HOME        back to the scene (each page's button also toggles it)
  *   OCT- / OCT+ the tempo         PLAY  the voices wait, and the sound rings out
  *   keys 1-6    mute a voice      keys 7-27  play the selected voice on the biome's scale
  *
@@ -18,24 +23,45 @@
 /* the panel's labels and encoders */
 enum { SB_FX, SB_SCL, SB_ENV, SB_LFO, SB_EDIT, SB_GLO, SB_HOME, SB_SAVE, SB_ARP, SB_SEQ, SB_PLAY, SB_REC, SB_OCTDN, SB_OCTUP, SB_N };
 enum { SE_SELECT, SE_ALGO, SE_PRESET, SE_K1, SE_K2, SE_K3, SE_K4, SE_N };
-enum { PG_HOME, PG_EDIT, PG_PHYS };
+enum { PG_HOME, PG_EDIT, PG_PHYS, PG_FX, PG_SCL, PG_ENV, PG_LFO, PG_SAVE, PG_N };
 
 static int32_t sk_in_enc(uint32_t role);
 static void sk_in_buttons(uint32_t *held, uint32_t *pressed);
 static uint32_t sk_in_keys(uint32_t *pressed);
 static void sk_led_btn(uint32_t label, uint32_t level);
 static void sk_led_key(uint32_t n, uint32_t level);
-static void sk_save_poll(void);
+static int sk_store_read(void *dst, uint32_t n);            /* the saved slots: 0 ok */
+static int sk_store_write(const void *src, uint32_t n);
 
 static struct {
     uint8_t page, biome;
     uint32_t pop_t, hud_t, k_t[4];       /* when the biome's name, the voice HUD, a knob was last touched */
     uint32_t held;
+    uint8_t slot, act;                   /* the SAVE page: the slot (0..7) and what the button does (load, save, clear) */
+    uint32_t toast_t;
+    char toast[16];
 } ui;
+
+/* the saved slots: a header, eight snapshots of a soundscape as the player has shaped it, and a checksum */
+#define SV_N 8
+#define SV_SLOT 88
+static struct {
+    uint32_t magic;
+    uint8_t slot[SV_N][SV_SLOT];
+    uint32_t sum;
+} sv;
+#define SV_MAGIC 0x31594B53u                 /* "SKY1" */
 
 static const char *const UI_MAC[4] = {"DENSITY", "MOTION", "COLOUR", "SPACE"};
 static const char *const UI_EDITK[4] = {"LEVEL", "PAN", "SUSTAIN", "TONE"};
 static const char *const UI_PHYSK[4] = {"SPIN", "GRAVITY", "BOUNCE", "BALLS"};
+static const char *const UI_PGK[PG_N][4] = {
+    {"DENSITY", "MOTION", "COLOUR", "SPACE"}, {"LEVEL", "PAN", "SUSTAIN", "TONE"}, {"SPIN", "GRAVITY", "BOUNCE", "BALLS"},
+    {"ROOM", "ECHO", "CLOUD", "HI CUT"}, {"ROOT", "SCALE", "OCTAVE", "WALK"}, {"ATTACK", "RELEASE", "GLIDE", "CURVE"},
+    {"RATE", "DEPTH", "PAN", "VIB"}, {"SLOT", "DO", "FROM", "STATE"},
+};
+static const char *const UI_PGNAME[PG_N] = {"", "VOICE", "PHYSICS", "FX", "SCALE", "ENVELOPE", "LFO", "SAVE"};
+static const char *const UI_ACTS[3] = {"LOAD", "SAVE", "CLEAR"};
 static const uint8_t UI_ACC[4] = {C_PINK, C_CYAN, C_YELLOW, C_GREEN};
 static const uint8_t UI_MACAIM[4] = {2, 0, 1, 5};      /* the part of the scene each macro points at */
 
@@ -43,6 +69,135 @@ static void ui_touch(uint32_t v)
 {
     sc_touch_v = (uint8_t)v;
     sc_touch_n++;
+}
+
+static uint32_t sv_sum(void)
+{
+    const uint8_t *p = (const uint8_t *)sv.slot;
+    uint32_t i, h = 0x811C9DC5u;
+    for (i = 0; i < sizeof sv.slot; i++)
+        h = (h ^ p[i]) * 16777619u;
+    return h;
+}
+
+static void sv_pack(uint8_t *d, uint32_t biome)
+{
+    uint32_t i, k = 0;
+    d[k++] = 1;
+    d[k++] = (uint8_t)biome;
+    for (i = 0; i < 4u; i++)
+        d[k++] = sk_s.mac[i];
+    d[k++] = sk_s.bpm;
+    d[k++] = sk_s.root;
+    d[k++] = sk_s.scl;
+    d[k++] = (uint8_t)sk_s.shift;
+    d[k++] = (uint8_t)sk_s.walk;
+    for (i = 0; i < 4u; i++)
+        d[k++] = sk_s.fx[i];
+    for (i = 0; i < 4u; i++)
+        d[k++] = sk_s.lfo[i];
+    for (i = 0; i < SK_NV; i++) {
+        d[k++] = sk_s.type[i];
+        d[k++] = sk_s.level[i];
+        d[k++] = (uint8_t)sk_s.pan[i];
+        d[k++] = (uint8_t)sk_s.sus[i];
+        d[k++] = (uint8_t)sk_s.tone[i];
+        d[k++] = (uint8_t)sk_s.atk[i];
+        d[k++] = (uint8_t)sk_s.rel[i];
+        d[k++] = (uint8_t)sk_s.gli[i];
+        d[k++] = sk_s.crv[i];
+    }
+    d[k++] = sk_s.len;
+    for (i = 0; i < 8u; i++)
+        d[k++] = sk_s.iv[i];
+}
+
+static void ui_biome(uint32_t i, uint32_t now);
+static void sv_unpack(const uint8_t *d, uint32_t now)
+{
+    uint32_t i, k = 2, base = d[1] % SK_NBIOME;
+    ui_biome(base, now);
+    ui.pop_t = now - 10000u;
+    for (i = 0; i < 4u; i++)
+        sk_s.mac[i] = d[k++] & 127u;
+    sk_s.bpm = d[k] < 30u ? 30u : d[k] > 160u ? 160u : d[k];
+    k++;
+    sk_s.root = d[k++] % 12u;
+    {
+        uint32_t scl = d[k++];
+        uint32_t len = d[2 + 4 + 1 + 1 + 1 + 1 + 1 + 4 + 4 + SK_NV * 9];
+        sk_s.shift = (int8_t)d[k++];
+        sk_s.walk = (int8_t)d[k++];
+        if (scl < SK_NSCALE)
+            sk_scale_set(scl);
+        else if (len >= 1u && len <= 8u) {
+            sk_s.scl = SK_NSCALE;
+            sk_s.len = (uint8_t)len;
+            for (i = 0; i < 8u; i++)
+                sk_s.iv[i] = d[2 + 4 + 1 + 1 + 1 + 1 + 1 + 4 + 4 + SK_NV * 9 + 1 + i];
+        }
+    }
+    sk_s.shift = (int8_t)(sk_s.shift < -2 ? -2 : sk_s.shift > 2 ? 2 : sk_s.shift);
+    sk_s.walk = (int8_t)(sk_s.walk < -3 ? -3 : sk_s.walk > 3 ? 3 : sk_s.walk);
+    for (i = 0; i < 4u; i++)
+        sk_s.fx[i] = d[k++] & 127u;
+    for (i = 0; i < 4u; i++)
+        sk_s.lfo[i] = d[k++] & 127u;
+    for (i = 0; i < SK_NV; i++) {
+        sk_s.type[i] = (uint8_t)(d[k++] % VT_N);
+        sk_s.level[i] = d[k] > 100u ? 100u : d[k];
+        k++;
+        sk_s.pan[i] = (int8_t)d[k++];
+        sk_s.sus[i] = (int8_t)d[k++];
+        sk_s.tone[i] = (int8_t)d[k++];
+        sk_s.atk[i] = (int8_t)d[k++];
+        sk_s.rel[i] = (int8_t)d[k++];
+        sk_s.gli[i] = (int8_t)d[k++];
+        sk_s.crv[i] = d[k++] & 127u;
+        if (sk_s.sus[i] < -6 || sk_s.sus[i] > 6) sk_s.sus[i] = 0;
+        if (sk_s.tone[i] < -6 || sk_s.tone[i] > 6) sk_s.tone[i] = 0;
+        if (sk_s.atk[i] < -6 || sk_s.atk[i] > 6) sk_s.atk[i] = 0;
+        if (sk_s.rel[i] < -6 || sk_s.rel[i] > 6) sk_s.rel[i] = 0;
+        if (sk_s.gli[i] < -6 || sk_s.gli[i] > 6) sk_s.gli[i] = 0;
+        if (sk_s.pan[i] < -64 || sk_s.pan[i] > 63) sk_s.pan[i] = 0;
+    }
+    sk_steplen_set();
+}
+
+static void ui_toast(const char *a, uint32_t n, uint32_t now)
+{
+    char *p = ui.toast;
+    while (*a && p < ui.toast + 11)
+        *p++ = *a++;
+    *p++ = ' ';
+    *p++ = (char)('0' + n);
+    *p = 0;
+    ui.toast_t = now;
+}
+
+/* what the SAVE button does on the SAVE page */
+static void ui_do_save(uint32_t now)
+{
+    uint8_t *d = sv.slot[ui.slot];
+    if (ui.act == 0u) {                                            /* load */
+        if (!d[0])
+            ui_toast("EMPTY", ui.slot + 1u, now);
+        else {
+            sv_unpack(d, now);
+            ui_toast("LOADED", ui.slot + 1u, now);
+        }
+        return;
+    }
+    if (ui.act == 1u)
+        sv_pack(d, ui.biome);
+    else {
+        uint32_t i;
+        for (i = 0; i < SV_SLOT; i++)
+            d[i] = 0;
+    }
+    sv.magic = SV_MAGIC;
+    sv.sum = sv_sum();
+    ui_toast(sk_store_write(&sv, sizeof sv) == 0 ? (ui.act == 1u ? "SAVED" : "CLEARED") : "FAILED", ui.slot + 1u, now);
 }
 
 static void ui_biome(uint32_t i, uint32_t now)
@@ -69,6 +224,17 @@ static void ui_input(uint32_t now)
         ui.page = ui.page == PG_EDIT ? PG_HOME : PG_EDIT;
     if (pr & (1u << SB_SEQ))
         ui.page = ui.page == PG_PHYS ? PG_HOME : PG_PHYS;
+    {
+        static const uint8_t PB[5] = {SB_FX, SB_SCL, SB_ENV, SB_LFO, SB_SAVE};
+        static const uint8_t PGS[5] = {PG_FX, PG_SCL, PG_ENV, PG_LFO, PG_SAVE};
+        for (i = 0; i < 5u; i++)
+            if (pr & (1u << PB[i])) {
+                if (ui.page == PG_SAVE && PGS[i] == PG_SAVE)
+                    ui_do_save(now);                                /* SAVE again does what K2 says */
+                else
+                    ui.page = ui.page == PGS[i] ? PG_HOME : PGS[i];
+            }
+    }
     if (pr & (1u << SB_PLAY))
         sk_s.hold ^= 1u;
     if (pr & (1u << SB_OCTDN))
@@ -116,6 +282,29 @@ static void ui_input(uint32_t now)
             }
             ui.hud_t = now;
             ui_touch(v);
+        } else if (ui.page >= PG_FX) {
+            uint32_t v = sk_s.sel;
+            switch (ui.page * 4u + i) {
+            case PG_FX * 4u + 0: case PG_FX * 4u + 1: case PG_FX * 4u + 2: case PG_FX * 4u + 3:
+                sk_s.fx[i] = (uint8_t)ui_clamp(sk_s.fx[i] + d * 2, 0, 127);
+                break;
+            case PG_SCL * 4u + 0: sk_s.root = (uint8_t)((sk_s.root + 12u * 8u + (uint32_t)d) % 12u); break;
+            case PG_SCL * 4u + 1: sk_scale_set((sk_s.scl % (SK_NSCALE + 1u) + (SK_NSCALE + 1u) * 8u + (uint32_t)d) % SK_NSCALE); break;
+            case PG_SCL * 4u + 2: sk_s.shift = (int8_t)ui_clamp(sk_s.shift + d, -2, 2); break;
+            case PG_SCL * 4u + 3: sk_s.walk = (int8_t)ui_clamp(sk_s.walk + d, -3, 3); break;
+            case PG_ENV * 4u + 0: sk_s.atk[v] = (int8_t)ui_clamp(sk_s.atk[v] + d, -6, 6); break;
+            case PG_ENV * 4u + 1: sk_s.rel[v] = (int8_t)ui_clamp(sk_s.rel[v] + d, -6, 6); break;
+            case PG_ENV * 4u + 2: sk_s.gli[v] = (int8_t)ui_clamp(sk_s.gli[v] + d, -6, 6); break;
+            case PG_ENV * 4u + 3: sk_s.crv[v] = (uint8_t)ui_clamp(sk_s.crv[v] + d * 4, 0, 127); break;
+            case PG_LFO * 4u + 0: case PG_LFO * 4u + 1: case PG_LFO * 4u + 2: case PG_LFO * 4u + 3:
+                sk_s.lfo[i] = (uint8_t)ui_clamp(sk_s.lfo[i] + d * 2, 0, 127);
+                break;
+            case PG_SAVE * 4u + 0: ui.slot = (uint8_t)ui_clamp(ui.slot + d, 0, SV_N - 1); break;
+            case PG_SAVE * 4u + 1: ui.act = (uint8_t)ui_clamp(ui.act + d, 0, 2); break;
+            default: break;
+            }
+            if (ui.page == PG_ENV)
+                ui_touch(v);
         } else {
             switch (i) {
             case 0: ph.spin = (int8_t)ui_clamp(ph.spin + d * 2, -64, 63); break;
@@ -148,9 +337,11 @@ static void ui_input(uint32_t now)
     for (i = 0; i < SB_N; i++) {
         uint32_t lvl = 0;
         if ((i == SB_EDIT && ui.page == PG_EDIT) || (i == SB_SEQ && ui.page == PG_PHYS) || (i == SB_HOME && ui.page == PG_HOME) ||
-            (i == SB_PLAY && sk_s.hold))
+            (i == SB_PLAY && sk_s.hold) || (i == SB_FX && ui.page == PG_FX) || (i == SB_SCL && ui.page == PG_SCL) ||
+            (i == SB_ENV && ui.page == PG_ENV) || (i == SB_LFO && ui.page == PG_LFO) || (i == SB_SAVE && ui.page == PG_SAVE))
             lvl = 3;
-        else if (i == SB_EDIT || i == SB_SEQ || i == SB_HOME || i == SB_PLAY || i == SB_OCTDN || i == SB_OCTUP)
+        else if (i == SB_EDIT || i == SB_SEQ || i == SB_HOME || i == SB_PLAY || i == SB_OCTDN || i == SB_OCTUP || i == SB_FX ||
+                 i == SB_SCL || i == SB_ENV || i == SB_LFO || i == SB_SAVE)
             lvl = 1;
         sk_led_btn(i, lvl);
     }
@@ -221,6 +412,38 @@ static void ui_panel(uint32_t now)
                 break;
             default: v = sk_s.tone[s]; frac = (v + 6) * 255 / 12; ui_num(b, v); break;
             }
+        } else if (ui.page >= PG_FX) {
+            uint32_t s = sk_s.sel;
+            label = UI_PGK[ui.page][i];
+            frac = 0;
+            switch (ui.page * 4u + (uint32_t)i) {
+            case PG_FX * 4u + 0: case PG_FX * 4u + 1: case PG_FX * 4u + 2: case PG_FX * 4u + 3:
+                v = sk_s.fx[i]; frac = v * 2; ui_num(b, v * 100 / 127); break;
+            case PG_SCL * 4u + 0: { const char *m = SK_NOTE_NAME[sk_s.root % 12u]; int k; for (k = 0; m[k]; k++) b[k] = m[k]; b[k] = 0; frac = sk_s.root * 255 / 11; break; }
+            case PG_SCL * 4u + 1: {
+                const char *m = sk_s.scl < SK_NSCALE ? SK_SCALES[sk_s.scl].name : "Own";
+                int k;
+                for (k = 0; m[k] && k < 9; k++) b[k] = m[k];
+                b[k] = 0;
+                frac = sk_s.scl < SK_NSCALE ? sk_s.scl * 255 / (SK_NSCALE - 1u) : 255;
+                break;
+            }
+            case PG_SCL * 4u + 2: v = sk_s.shift; frac = (v + 2) * 255 / 4; if (v > 0) b[0] = '+', ui_num(b + 1, v); else ui_num(b, v); break;
+            case PG_SCL * 4u + 3: v = sk_s.walk; frac = (v + 3) * 255 / 6; if (v > 0) b[0] = '+', ui_num(b + 1, v); else ui_num(b, v); break;
+            case PG_ENV * 4u + 0: v = sk_s.atk[s]; frac = (v + 6) * 255 / 12; if (v > 0) b[0] = '+', ui_num(b + 1, v); else ui_num(b, v); break;
+            case PG_ENV * 4u + 1: v = sk_s.rel[s]; frac = (v + 6) * 255 / 12; if (v > 0) b[0] = '+', ui_num(b + 1, v); else ui_num(b, v); break;
+            case PG_ENV * 4u + 2: v = sk_s.gli[s]; frac = (v + 6) * 255 / 12; if (v > 0) b[0] = '+', ui_num(b + 1, v); else ui_num(b, v); break;
+            case PG_ENV * 4u + 3: v = sk_s.crv[s]; frac = v * 2; ui_num(b, v * 100 / 127); break;
+            case PG_LFO * 4u + 0: case PG_LFO * 4u + 1: case PG_LFO * 4u + 2: case PG_LFO * 4u + 3:
+                v = sk_s.lfo[i]; frac = v * 2; ui_num(b, v * 100 / 127); break;
+            case PG_SAVE * 4u + 0: v = ui.slot; frac = v * 255 / (SV_N - 1); ui_num(b, v + 1); break;
+            case PG_SAVE * 4u + 1: { const char *m = UI_ACTS[ui.act % 3u]; int k; for (k = 0; m[k]; k++) b[k] = m[k]; b[k] = 0; frac = ui.act * 127; break; }
+            case PG_SAVE * 4u + 2:
+                if (sv.slot[ui.slot][0]) { b[0] = 'B'; ui_num(b + 1, sv.slot[ui.slot][1] % SK_NBIOME + 1u); }
+                else b[0] = '-', b[1] = 0;
+                break;
+            default: { const char *m = sv.slot[ui.slot][0] ? "full" : "empty"; int k; for (k = 0; m[k]; k++) b[k] = m[k]; b[k] = 0; frac = sv.slot[ui.slot][0] ? 255 : 0; break; }
+            }
         } else {
             label = UI_PHYSK[i];
             switch (i) {
@@ -263,6 +486,13 @@ static void ui_hud(uint32_t now)
     fb_text_halo(FB_W - 6 - fb_text_w(b), 4, b, sk_s.hold ? C_YELLOW : C_INK2, C_BG);
     if (sk_s.hold)
         fb_text_halo(FB_W - 6 - fb_text_w("HOLD"), 18, "HOLD", C_YELLOW, C_BG);
+    if (ui.page != PG_HOME)
+        fb_text_halo((FB_W - fb_text_w(UI_PGNAME[ui.page])) / 2, 4, UI_PGNAME[ui.page], C_INK2, C_BG);
+    if (now - ui.toast_t < 1800u && ui.toast[0]) {
+        int w = fb_text_w(ui.toast) + 24, x = (FB_W - w) / 2;
+        fb_rbox(x, 62, w, 22, 5, C_PANEL);
+        fb_text_c(FB_W / 2, 66, ui.toast, C_INK);
+    }
     /* the biome's name, when it has just changed */
     if (now - ui.pop_t < 2600u) {
         const char *n = SK_BIOMES[ui.biome].name;
@@ -289,6 +519,16 @@ static void ui_draw(uint32_t now)
     ui_hud(now);
     ui_panel(now);
     sk_present();
+}
+
+/* the saved slots, read once at boot (before the audio runs, on the device) */
+static void ui_store_load(void)
+{
+    if (sk_store_read(&sv, sizeof sv) != 0 || sv.magic != SV_MAGIC || sv.sum != sv_sum()) {
+        uint32_t i;
+        for (i = 0; i < sizeof sv; i++)
+            ((uint8_t *)&sv)[i] = 0;
+    }
 }
 
 static void ui_init(uint32_t now)
