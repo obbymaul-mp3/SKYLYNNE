@@ -677,6 +677,7 @@ static void cf_fx_chain(int32_t *l, int32_t *r, uint32_t n)
         cfx_filter_coefs();
     }
     cfx_xf_prepare();
+    sky_run(l, r, n);                            /* (SKYLYNNE's voices on the bus: the granular layer and the effects then act on them) */
 #if CF_OLD_GRAIN
     cf_gran_run(l, r, n);                        /* (the granular layer first: the effects then act on its sound) */
 #endif

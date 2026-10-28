@@ -592,6 +592,7 @@ static void cf_audio_block(uint32_t n)
         cf_apply(&cf_evq[cf_evq_r % CF_EVQ]);
         cf_evq_r++;
     }
+    sky_block(n);                                /* (SKYLYNNE: the conductor's clock) */
     cf_midi_in();
     cf_ms_rem += n * 1000u;
     while (cf_ms_rem >= FS) {

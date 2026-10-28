@@ -232,7 +232,14 @@ static uint32_t cf_panel_fix(uint32_t c, int colour)
 }
 #endif
 
-static uint8_t cf_hat_pc;   /* the root whose colours the hat wears now */
+static uint8_t cf_hat_pc;   /* the root whose colours the hat wears now (3IS; unused here) */
+/* SKYLYNNE's night city: 52 the darkest navy (outlines, the towers), 53 white, 54 pale lavender, 55 mid blue; 56 .. 59
+ * the sky, dark at the top to the purple glow of the horizon; 60 hot pink, 61 cyan, 62 amber, 63 mint: the voices' lights */
+static const uint32_t SKY_PAL[12] = {
+    0x070B1E, 0xF2F7FF, 0xB7C6FF, 0x6E86D8,
+    0x04061A, 0x0B1238, 0x1B2A6B, 0x4A3F8F,
+    0xFF3FA4, 0x2EE6FF, 0xFFB43A, 0x62FFB0,
+};
 static void cf_palette_build(void)
 {
     uint32_t i;
@@ -241,12 +248,10 @@ static void cf_palette_build(void)
     for (i = 0; i < 4u; i++) {
         const cf_theme_t *th = &CF_THEMES[cs.accent % CF_NTHEMES];
         cf_pal[48 + i] = !i && th->light ? th->light : fl_pal_rgb[FL_C(th->ramp, i)];
-        cf_pal[52 + i] = fl_ice_rgb[i];
     }
-    for (i = 0; i < 8u; i++)
-        cf_pal[56 + i] = fl_back_rgb[i];
-    for (i = 0; i < 4u; i++)
-        cf_pal[60 + i] = fl_hat_rgb[cf_hat_pc % 12u][i];
+    for (i = 0; i < 12u; i++)                       /* (SKYLYNNE: the night city's colours, 52 .. 63) */
+        cf_pal[52 + i] = SKY_PAL[i];
+    (void)cf_hat_pc;
 #if !defined CF_EMU && !defined CF_PANEL_PLAIN
     for (i = 0; i < 64u; i++)
         cf_pal[i] = cf_panel_fix(cf_pal[i], i >= FL_RAMP0);

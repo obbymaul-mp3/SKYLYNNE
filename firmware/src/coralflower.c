@@ -137,6 +137,7 @@ static void cf_fx_chain(int32_t *l, int32_t *r, uint32_t n);
 #include "fx.c"
 #undef mix_block
 #if CF_OLD_GRAIN
+#include "sky.c"                          /* SKYLYNNE: the self-playing resonator voices (the conductor, the master-bus add) */
 #include "cf_gran.c"                      /* the old granular layer on the master bus (retired: GRAIN is an engine now) */
 #endif
 #include "cf_fx.c"                        /* the effects chain (cr_fx.c's delay, reverb and chorus in it) */
