@@ -16,6 +16,7 @@
 #define SC_HZ 104                        /* the horizon */
 #define SC_PX 98                         /* where the figure sits (the hip) */
 #define SC_PY 138                        /* the cliff's top there */
+#define SC_CX0 128                       /* where the city starts */
 #define SC_EDGE 106                      /* the cliff's edge */
 
 static const uint8_t SC_COL[SK_NV] = {C_PINK, C_CYAN, C_YELLOW, C_EMBER, C_GREEN, C_ACC};     /* the voices' colours */
@@ -78,6 +79,7 @@ static void sc_theme(uint32_t biome)
     sc.refl[C_F2] = C_F0;
     sc.refl[C_F3] = C_F0;
     sc.refl[C_MIST] = C_W0;
+    sc.refl[C_G0] = C_G1;
 }
 
 static void sc_update(uint32_t now)
@@ -253,24 +255,70 @@ static void sc_mist(uint32_t now)
 static void sc_shore(void)
 {
     int x;
-    for (x = 0; x < FB_W; x++) {
-        int h = 3 + (int)(sc_hash((uint32_t)(x >> 3) + 0x77u) % 4u) + (x > 118 ? 0 : 3);
+    for (x = 0; x < SC_CX0; x++) {
+        int h = 3 + (int)(sc_hash((uint32_t)(x >> 3) + 0x77u) % 4u) + 3;
         fb_rect(x, SC_HZ - h, 1, h, C_F1);
         if ((x & 3) == 0)
             fb_pset(x, SC_HZ - h, C_F2);
     }
 }
 
-static void sc_lights(uint32_t now)
+/* the city on the far shore: dark towers with neon windows, a few signs, a blinking mast, and a faint glow above it.
+ * Voice 4 brings more windows on; DENSITY adds a few. The only vivid thing on the screen. */
+static void sc_city(uint32_t now)
 {
-    int e = sc_e[3], i;
-    for (i = 0; i < 16; i++) {
-        int x = 124 + i * 7 + (int)(sc_hash((uint32_t)i + 9u) % 4u), on = e > 50 && i * 127 / 16 < sk_s.mac[0] + 30;
-        uint8_t c = (i & 3) == 0 ? C_CYAN : ((i & 1) ? C_YELLOW : C_EMBER);
-        if (on || ((now >> 9) + (uint32_t)i) % 13u == 0u)
-            fb_pset(x, SC_HZ - 4 - (int)(sc_hash((uint32_t)i * 5u) % 3u), on ? c : C_STAR2);
+    int x = SC_CX0, e = sc_e[3], lit = 20 + (e * 30 >> 8) + (sk_s.mac[0] >> 4), b = 0;
+    static int8_t hmap[FB_W];
+    while (x < FB_W - 2) {
+        uint32_t k = sc_hash((uint32_t)b * 7919u + 0x31u);
+        int w = 5 + (int)(k % 7u), h = 7 + (int)((k >> 8) % 19u) + (x > 170 && x < 205 ? 6 : 0), i, wx, wy;
+        if (x + w > FB_W - 1)
+            w = FB_W - 1 - x;
+        for (i = 0; i < w; i++)
+            hmap[x + i] = (int8_t)h;
+        fb_rect(x, SC_HZ - h, w, h, C_F1);
+        fb_hline(x, SC_HZ - h, w, C_F2);
+        for (wy = SC_HZ - h + 3; wy < SC_HZ - 3; wy += 4)
+            for (wx = x + 1; wx < x + w - 2; wx += 4) {
+                uint32_t q = sc_hash((uint32_t)(wx * 131 + wy * 17) + 0x77u);
+                int on = (int)(q % 100u) < lit;
+                if (!on && ((now >> 10) + (q >> 8)) % 97u == 0u)
+                    on = 1;                                   /* a window now and then */
+                if (on)
+                    fb_rect(wx, wy, 2, 2, (uint8_t)(C_N0 + ((q >> 12) & 3u)));
+            }
+        if ((k >> 20) % 3u == 0u && w > 6) {                  /* a neon sign */
+            uint8_t c = (uint8_t)(C_N0 + ((k >> 24) & 3u));
+            int sy = SC_HZ - h + 1;
+            fb_hline(x + 1, sy, w - 2, c);
+            if (h > 14)
+                fb_vline(x + w - 2, sy, 5, c);
+        }
+        if ((k >> 22) % 5u == 0u) {                           /* a mast with a blinking light */
+            fb_vline(x + w / 2, SC_HZ - h - 5, 5, C_F1);
+            if (((now >> 9) + (uint32_t)b) % 4u < 2u)
+                fb_pset(x + w / 2, SC_HZ - h - 6, C_N0);
+        }
+        x += w + (int)((k >> 16) % 2u);
+        b++;
+    }
+    /* the glow: a faint dithered haze over the roofs, thicker over the tall ones, breathing very slowly */
+    {
+        int breathe = 2 + (sc_tri((int)(now >> 6)) >> 6);
+        for (x = SC_CX0; x < FB_W - 1; x++) {
+            int h = hmap[x], g = 6 + (h >> 2) + breathe + (e >> 6), i;
+            for (i = 1; i <= g; i++) {
+                int y = SC_HZ - h - i;
+                if (y < 0)
+                    break;
+                if (((x + y) & 1) == 0 && (i < g / 2 || ((x >> 1) + y) % 3 == 0))
+                    if (fb[y * FB_W + x] >= C_S0 && fb[y * FB_W + x] <= C_S5)
+                        fb_pset(x, y, C_G0);
+            }
+        }
     }
 }
+
 static void sc_arm(int sx, int sy, int tx, int ty, uint8_t c)
 {
     fb_line(sx, sy, tx, ty, c);
@@ -444,7 +492,7 @@ static void sc_reflect(uint32_t now)
             break;
         }
         src = fb + sy * FB_W;
-        dx = ((sc_tri(d * 13 + (int)(now >> 4)) - 128) * (1 + d / 10)) >> 6;
+        dx = ((sc_tri(d * 13 + (int)(now >> 4)) - 128) * (1 + d / 24)) >> 7;
         for (x = 0; x < FB_W; x++) {
             int sx = x + dx;
             uint8_t c;
@@ -452,6 +500,8 @@ static void sc_reflect(uint32_t now)
             c = sc.refl[src[sx] & (FB_PAL - 1)];
             if ((c == C_MOON2 || c == C_STAR2) && ((x + y) & 1))
                 c = C_W2;
+            else if (c >= C_N0 && c <= C_N3 && ((x + y) & 1))        /* the neon lies on the water, half as bright */
+                c = C_G1;
             dst[x] = c;
         }
     }
@@ -481,13 +531,15 @@ static void sc_water(uint32_t now)
     }
     /* the far lights' streaks, ripples from the sub's strikes */
     {
-        int i, e3 = sc_e[3];
+        int e3 = sc_e[3];
         uint32_t age = now - sc.hit[5];
-        int k;
-        for (i = 0; i < 16; i++) {
-            int x = 124 + i * 7 + (int)(sc_hash((uint32_t)i + 9u) % 4u);
-            if (e3 > 50 && i * 127 / 16 < sk_s.mac[0] + 30)
-                fb_vline(x, SC_HZ + 1, 2 + e3 / 60, (i & 3) == 0 ? C_CYAN : ((i & 1) ? C_YELLOW : C_EMBER));
+        int k, x;
+        for (x = SC_CX0; x < FB_W - 1; x += 1) {                     /* the city's light lying on the water */
+            uint32_t q = sc_hash((uint32_t)x * 31u + (now >> 9));
+            int n = 3 + (int)(q % 9u) + (e3 >> 6), j;
+            for (j = 0; j < n; j++)
+                if (((x + j) & 1) == 0)
+                    fb_pset(x, SC_HZ + 2 + j * 2, C_G1);
         }
         for (k = 0; k < 3; k++) {
             int a = (int)age - k * 350, rr, x;
@@ -564,9 +616,9 @@ static void sc_draw(uint32_t now)
     sc_stars(now);
     sc_moon();
     sc_comet(now);
-    sc_shore();
-    sc_lights(now);
     sc_mist(now);
+    sc_shore();
+    sc_city(now);
     sc_reflect(now);
     sc_water(now);
     sc_foreground();
