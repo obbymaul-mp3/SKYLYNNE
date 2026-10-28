@@ -128,7 +128,7 @@ static void fm1_fault(const fm1_crash_t *c)
     char b[12];
     uint32_t t0;
     fm1_audio_stop();
-    fb_theme(0);
+    fb_theme_snap(0);
     fb_fill(C_BG);
     fb_text(10, 10, "SKYLYNNE stopped", C_PINK);
     sk_hexs(b, c->vec);
@@ -183,7 +183,7 @@ static uint32_t sk_update_poll(uint32_t held)
     }
     if (fm1_ms - t0 > 5000u) {
         fm1_audio_stop();
-        fb_theme(0);
+        fb_theme_snap(0);
         fb_fill(C_BG);
         fb_text_c(120, 108, "UPDATE MODE", C_INK);
         sk_present();
@@ -202,7 +202,7 @@ static void sk_splash(uint32_t ms)
     uint32_t t;
     for (t = 0; t < ms; t += 40u) {
         int a = (int)(t * 255u / ms);
-        fb_theme(1);
+        fb_theme_snap(1);
         fb_fill(C_BG);
         fb_text_c(120, 104, "SKYLYNNE", a > 120 ? C_INK : C_INK2);
         fb_text_c(120, 124, sk_safe ? "SAFE MODE" : SK_VERSION, sk_safe ? C_YELLOW : C_INK2);
