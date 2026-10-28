@@ -88,11 +88,38 @@ typedef struct {
 
 static sky_v_t sky_v[SKY_NV] __attribute__((section(".pool")));
 static struct {
-    uint32_t step, clk, rnd;
+    uint32_t step, clk, rnd, fall;
     uint32_t steplen;                    /* samples a sixteenth */
     uint16_t bpm;
 } sky_c;
 static const sky_biome_t *sky_b = &SKY_BIOME0;
+/* what the player turns, per voice (the home screen's knobs edit the selected voice's) */
+static struct {
+    uint8_t level;                       /* 0..100 (70: as the biome has it) */
+    uint8_t dens;                        /* 0..100: the chance of a hit (60: as the biome has it) */
+    int8_t decay;                        /* -6 .. 6 steps of ring-out */
+    uint8_t mat;                         /* material 0..5 */
+} sky_live[SKY_NV];
+static uint8_t sky_sel;                  /* the voice the knobs edit */
+static const char *const SKY_VNAME[SKY_NV] = {"SEA", "MOON", "STARS", "LIGHTS", "AURORA", "COMET"};
+static const char *const SKY_MATNAME[6] = {"Bell", "Glass", "Bar", "String", "Plate", "Wood"};
+static uint32_t sky_touch_n;             /* counts the knob turns (the screen: the figure points at the voice) */
+static uint8_t sky_touch_v;
+
+/* the home knobs (the selected voice): 0 level, 1 density, 2 decay, 3 material */
+static void sky_knob(uint32_t k, int d)
+{
+    int v;
+    uint32_t i = sky_sel;
+    switch (k) {
+    case 0: v = sky_live[i].level + d * 4; sky_live[i].level = (uint8_t)(v < 0 ? 0 : v > 100 ? 100 : v); break;
+    case 1: v = sky_live[i].dens + d * 4; sky_live[i].dens = (uint8_t)(v < 0 ? 0 : v > 100 ? 100 : v); break;
+    case 2: v = sky_live[i].decay + d; sky_live[i].decay = (int8_t)(v < -6 ? -6 : v > 6 ? 6 : v); break;
+    default: v = sky_live[i].mat + d; sky_live[i].mat = (uint8_t)(v < 0 ? 0 : v > 5 ? 5 : v); break;
+    }
+    sky_touch_v = (uint8_t)i;
+    sky_touch_n++;
+}
 static int32_t sky_gain = 17000;         /* the voices' master (Q15) */
 
 /* what the screen reads (written by the audio side; single bytes, read-only for the UI) */
@@ -191,13 +218,20 @@ static void sky_step(void)
     const sky_biome_t *b = sky_b;
     sky_ui.step = (uint8_t)(st & 15u);
     for (i = 0; i < SKY_NV; i++) {
-        const sky_cfg_t *c = &b->v[i];
-        uint32_t n = c->n ? c->n : 16u, hit, r;
+        const sky_cfg_t *c0 = &b->v[i];
+        sky_cfg_t cc = *c0;
+        const sky_cfg_t *c = &cc;
+        uint32_t n = c->n ? c->n : 16u, hit, r, chance;
+        int dcy = (int)c0->decay + sky_live[i].decay;
+        cc.decay = (uint8_t)(dcy < 0 ? 0 : dcy > 23 ? 23 : dcy);
+        cc.mat = sky_live[i].mat;
+        cc.vel = (uint8_t)((uint32_t)c0->vel * sky_live[i].level / 70u > 127u ? 127u : (uint32_t)c0->vel * sky_live[i].level / 70u);
         hit = (((st + c->rot) % n) * c->k) % n < c->k;
         if (!hit)
             continue;
         r = sky_rand();
-        if ((r & 255u) >= c->prob)
+        chance = (uint32_t)c0->prob * sky_live[i].dens / 60u;
+        if ((r & 255u) >= (chance > 255u ? 255u : chance))
             continue;
         {
             sky_v_t *v = &sky_v[i];
@@ -226,17 +260,25 @@ static void sky_block(uint32_t n)
     if (!sky_c.steplen) {
         sky_c.bpm = sky_b->bpm;
         sky_c.steplen = (2646000u / sky_c.bpm) / 4u;       /* a quarter is 2646000 / bpm samples */
-        for (i = 0; i < SKY_NV; i++)
+        for (i = 0; i < SKY_NV; i++) {
             sky_v[i].deg = (int8_t)sky_b->len;
+            sky_live[i].level = 70;
+            sky_live[i].dens = 60;
+            sky_live[i].decay = 0;
+            sky_live[i].mat = sky_b->v[i].mat;
+        }
     }
     sky_c.clk += n;
     while (sky_c.clk >= sky_c.steplen) {
         sky_c.clk -= sky_c.steplen;
         sky_step();
     }
-    for (i = 0; i < SKY_NV; i++)                          /* the light falls: ~0.4 s */
-        if (sky_ui.lit[i])
-            sky_ui.lit[i] = (uint8_t)(sky_ui.lit[i] > 2u ? sky_ui.lit[i] - 2u : 0u);
+    if (++sky_c.fall >= 2u) {                             /* the light falls over ~0.5 s */
+        sky_c.fall = 0;
+        for (i = 0; i < SKY_NV; i++)
+            if (sky_ui.lit[i])
+                sky_ui.lit[i] = (uint8_t)(sky_ui.lit[i] > 3u ? sky_ui.lit[i] - 3u : 0u);
+    }
 }
 
 /* add the voices to the master bus */

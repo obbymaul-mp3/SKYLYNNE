@@ -649,7 +649,7 @@ static void draw_spell(void)
     }
 }
 
-#include "sky_view.c"                       /* SKYLYNNE: the skyline home screen */
+#include "sky_view.c"                       /* SKYLYNNE: the sea cliff at night */
 static void draw_home(void)
 {
     if (CF_SKYHOME) {

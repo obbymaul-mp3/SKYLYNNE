@@ -175,26 +175,11 @@ static void ui_knob_info(int k, cf_knob_t *o)
     o->bar = -1;
     switch (cu.scr) {
     case SCR_HOME:
-        switch (k) {
-        case 0: kfmt(o->name, 12, "QUANTIZE"); kfmt(o->val, 14, Q_NAME[cs.chord.quantize]); break;
-        case 1:
-            kfmt(o->name, 12, "KEY");
-            kpc(o->val, cs.chord.tonic);
-            o->dis = cs.chord.quantize == CF_Q_OFF;
-            break;
-        case 2:
-            kfmt(o->name, 12, "SCALE");
-            kfmt(o->val, 14, CF_SCALES[cs.chord.scale].shrt);
-            o->dis = cs.chord.quantize == CF_Q_OFF;
-            break;
-        default:
-            kfmt(o->name, 12, "GLIDE");          /* (the chord sound's own, 0.5: cf_play.c cfp_glide_g) */
-            if (trk[CF_PART_CHORD].p[P_GLIDE] > 0)
-                kint(o->val, (int)cfe_glide_ms(trk[CF_PART_CHORD].p[P_GLIDE]), "ms");
-            else
-                kfmt(o->val, 14, "Off");
-            o->bar = (int16_t)(clampi(trk[CF_PART_CHORD].p[P_GLIDE], 0, 127) * 255 / 127);
-            break;
+        switch (k) {                                /* the selected voice's: how loud, how often, how long, what it is made of */
+        case 0: kfmt(o->name, 12, "LEVEL"); kint(o->val, sky_live[sky_sel].level, 0); o->bar = (int16_t)(sky_live[sky_sel].level * 255 / 100); break;
+        case 1: kfmt(o->name, 12, "DENSITY"); kint(o->val, sky_live[sky_sel].dens, 0); o->bar = (int16_t)(sky_live[sky_sel].dens * 255 / 100); break;
+        case 2: kfmt(o->name, 12, "DECAY"); kint(o->val, sky_live[sky_sel].decay, 0); o->bar = (int16_t)((sky_live[sky_sel].decay + 6) * 255 / 12); break;
+        default: kfmt(o->name, 12, "MATERIAL"); kfmt(o->val, 14, SKY_MATNAME[sky_live[sky_sel].mat]); break;
         }
         break;
     case SCR_SEL: {
@@ -391,36 +376,7 @@ static void ui_knob_turn(int k, int d)
     cu.knob_last = (uint8_t)k;
     switch (cu.scr) {
     case SCR_HOME:
-        if (k == 0) {
-            cs.chord.quantize = (uint8_t)clampi(cs.chord.quantize + d, 0, 2);
-            if (cs.chord.quantize != CF_Q_OFF && cu.pop == POP_MSG && !memcmp(cu.msg, CF_MSG_QOFF, sizeof CF_MSG_QOFF))
-                cu.pop = POP_NONE;                /* (the hint below: done) */
-        } else if (k == 1 && cs.chord.quantize != CF_Q_OFF)
-            cs.chord.tonic = (uint8_t)wrapi(cs.chord.tonic + d, 12);
-        else if (k == 2 && cs.chord.quantize != CF_Q_OFF)
-            cs.chord.scale = (uint8_t)clampi(cs.chord.scale + d, 0, CF_NSCALES - 1);
-        else if (k == 1 || k == 2)                /* dimmed (QUANTIZE Off): it says what wakes it, every turn (the
-                                                  * owner, 2026-10-20, after a reboot: "key и scale заблокировались") */
-            cf_message(CF_MSG_QOFF);
-        else if (k == 3) {
-            /* GLIDE: the chord sound's (0.5, the owner: "Если переключается инструмент, глайд переключается на тот
-             * что был у другого инструмента"): an edit of the sound, kept as the others are (a pattern's own sound:
-             * in the pattern; SAVE) */
-            /* steps of about a quarter more each: Off, 6, 13, 23, 33, 44, 57, 71, 87, 105, 131, 160, 192, 236, 285,
-             * 349, 420, 510, 625, 768, 944, 1158, 1463 ms (voice.c's TIME: 1 + g^2 / 8 control blocks) */
-            static const uint8_t GS[] = {0, 8, 12, 16, 19, 22, 25, 28, 31, 34, 38, 42, 46, 51, 56, 62, 68, 75, 83, 92,
-                                         102, 113, 127};
-            int g = trk[CF_PART_CHORD].p[P_GLIDE], i = 0;
-            while (i + 1 < (int)NELEM(GS) && GS[i + 1] <= g)
-                i++;
-            if (d < 0 && GS[i] < g)
-                i++;                             /* (a value between two steps: down goes to the lower) */
-            g = GS[clampi(i + d, 0, (int)NELEM(GS) - 1)];
-            fm1_irq_off();
-            trk[CF_PART_CHORD].p[P_GLIDE] = (int16_t)g;
-            fm1_irq_on();
-            cf_edited(CF_PART_CHORD);
-        }
+        sky_knob((uint32_t)k, d);
         cu_spell_update();
         cf_send_config();
         break;
@@ -648,6 +604,12 @@ static void cv_turned(int d)
 
 static void ui_select(int d)                     /* SELECT: the bass sound, or a screen's page */
 {
+    if (cu.scr == SCR_HOME) {                    /* HOME: the voice the knobs edit */
+        sky_sel = (uint8_t)wrapi(sky_sel + d, SKY_NV);
+        sky_touch_v = sky_sel;
+        sky_touch_n++;
+        return;
+    }
     if (cu.scr == SCR_SQ) {                      /* SEQUENCER: the track, the song's place */
         sq_pick(d);
         return;
