@@ -23,7 +23,7 @@
 /* the panel's labels and encoders */
 enum { SB_FX, SB_SCL, SB_ENV, SB_LFO, SB_EDIT, SB_GLO, SB_HOME, SB_SAVE, SB_ARP, SB_SEQ, SB_PLAY, SB_REC, SB_OCTDN, SB_OCTUP, SB_N };
 enum { SE_SELECT, SE_ALGO, SE_PRESET, SE_K1, SE_K2, SE_K3, SE_K4, SE_N };
-enum { PG_HOME, PG_EDIT, PG_PHYS, PG_FX, PG_SCL, PG_ENV, PG_LFO, PG_SAVE, PG_N };
+enum { PG_HOME, PG_EDIT, PG_PHYS, PG_FX, PG_SCL, PG_ENV, PG_LFO, PG_SAVE, PG_ARP, PG_GLO, PG_N };
 
 static int32_t sk_in_enc(uint32_t role);
 static void sk_in_buttons(uint32_t *held, uint32_t *pressed);
@@ -45,13 +45,13 @@ static struct {
 
 /* the saved slots: a header, eight snapshots of a soundscape as the player has shaped it, and a checksum */
 #define SV_N 8
-#define SV_SLOT 88
+#define SV_SLOT 92
 static struct {
     uint32_t magic;
     uint8_t slot[SV_N][SV_SLOT];
     uint32_t sum;
 } sv;
-#define SV_MAGIC 0x31594B53u                 /* "SKY1" */
+#define SV_MAGIC 0x32594B53u                 /* "SKY2" */
 
 static const char *const UI_MAC[4] = {"DENSITY", "MOTION", "COLOUR", "SPACE"};
 static const char *const UI_EDITK[4] = {"LEVEL", "PAN", "SUSTAIN", "TONE"};
@@ -60,11 +60,15 @@ static const char *const UI_PGK[PG_N][4] = {
     {"DENSITY", "MOTION", "COLOUR", "SPACE"}, {"LEVEL", "PAN", "SUSTAIN", "TONE"}, {"SPIN", "GRAVITY", "BOUNCE", "BALLS"},
     {"ROOM", "ECHO", "CLOUD", "HI CUT"}, {"ROOT", "SCALE", "OCTAVE", "WALK"}, {"ATTACK", "RELEASE", "GLIDE", "CURVE"},
     {"RATE", "DEPTH", "PAN", "VIB"}, {"SLOT", "DO", "FROM", "STATE"},
+    {"PATTERN", "RATE", "RANGE", "GATE"}, {"LOOP", "POWER", "BOLTS", "AURA"},
 };
-static const char *const UI_PGNAME[PG_N] = {"", "VOICE", "PHYSICS", "FX", "SCALE", "ENVELOPE", "LFO", "SAVE"};
+static const char *const UI_AURA[6] = {"GOLD", "WHITE", "BLUE", "GREEN", "RED", "VIOLET"};
+static const char *const UI_PGNAME[PG_N] = {"", "VOICE", "PHYSICS", "FX", "SCALE", "ENVELOPE", "LFO", "SAVE", "ARPEGGIO", "GLOW"};
 static const char *const UI_ACTS[3] = {"LOAD", "SAVE", "CLEAR"};
 static const uint8_t UI_ACC[4] = {C_PINK, C_CYAN, C_YELLOW, C_GREEN};
 static const uint8_t UI_MACAIM[4] = {2, 0, 1, 5};      /* the part of the scene each macro points at */
+
+static int ui_clamp(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
 
 static void ui_touch(uint32_t v)
 {
@@ -111,6 +115,10 @@ static void sv_pack(uint8_t *d, uint32_t biome)
     d[k++] = sk_s.len;
     for (i = 0; i < 8u; i++)
         d[k++] = sk_s.iv[i];
+    for (i = 0; i < 4u; i++)
+        d[k++] = sk_s.arp[i];
+    for (i = 0; i < 4u; i++)
+        d[k++] = sk_s.glo[i];
 }
 
 static void ui_biome(uint32_t i, uint32_t now);
@@ -162,6 +170,17 @@ static void sv_unpack(const uint8_t *d, uint32_t now)
         if (sk_s.gli[i] < -6 || sk_s.gli[i] > 6) sk_s.gli[i] = 0;
         if (sk_s.pan[i] < -64 || sk_s.pan[i] > 63) sk_s.pan[i] = 0;
     }
+    {
+        const uint8_t *a = d + 82;
+        sk_s.arp[0] = (uint8_t)(a[0] % 7u);
+        sk_s.arp[1] = (uint8_t)(a[1] % 5u);
+        sk_s.arp[2] = (uint8_t)ui_clamp(a[2], 1, 3);
+        sk_s.arp[3] = a[3] & 127u;
+        sk_s.glo[0] = (uint8_t)(a[4] % 8u);
+        sk_s.glo[1] = a[5] & 127u;
+        sk_s.glo[2] = a[6] & 127u;
+        sk_s.glo[3] = (uint8_t)(a[7] % 6u);
+    }
     sk_steplen_set();
 }
 
@@ -208,8 +227,6 @@ static void ui_biome(uint32_t i, uint32_t now)
     sc_theme(ui.biome);
     ui.pop_t = now;
 }
-
-static int ui_clamp(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
 
 /* the opening: begins at the next frame, ends by itself or at the first button, key or knob */
 static void ui_intro_start(void)
@@ -265,6 +282,26 @@ static void ui_input(uint32_t now)
                 else
                     ui.page = ui.page == PGS[i] ? PG_HOME : PGS[i];
             }
+    }
+    if (pr & (1u << SB_ARP)) {
+        if (ui.page == PG_ARP)
+            ui.page = PG_HOME;
+        else {
+            ui.page = PG_ARP;
+            if (!sk_s.arp[0])
+                sk_s.arp[0] = 1;                                     /* opening it starts it: UP */
+        }
+    }
+    if (pr & (1u << SB_GLO)) {
+        if (sk_gl.on) {
+            sk_glow_set(0);
+            if (ui.page == PG_GLO)
+                ui.page = PG_HOME;
+        } else {
+            sk_glow_set(1);
+            ui.page = PG_GLO;
+        }
+        ui.hud_t = now;
     }
     if (pr & (1u << SB_PLAY))
         sk_s.hold ^= 1u;
@@ -334,6 +371,14 @@ static void ui_input(uint32_t now)
                 break;
             case PG_SAVE * 4u + 0: ui.slot = (uint8_t)ui_clamp(ui.slot + d, 0, SV_N - 1); break;
             case PG_SAVE * 4u + 1: ui.act = (uint8_t)ui_clamp(ui.act + d, 0, 2); break;
+            case PG_ARP * 4u + 0: sk_s.arp[0] = (uint8_t)ui_clamp(sk_s.arp[0] + d, 0, 6); break;
+            case PG_ARP * 4u + 1: sk_s.arp[1] = (uint8_t)ui_clamp(sk_s.arp[1] + d, 0, 4); break;
+            case PG_ARP * 4u + 2: sk_s.arp[2] = (uint8_t)ui_clamp(sk_s.arp[2] + d, 1, 3); break;
+            case PG_ARP * 4u + 3: sk_s.arp[3] = (uint8_t)ui_clamp(sk_s.arp[3] + d * 3, 0, 127); break;
+            case PG_GLO * 4u + 0: sk_s.glo[0] = (uint8_t)ui_clamp(sk_s.glo[0] + d, 0, 7); sk_gl.n = 0; break;
+            case PG_GLO * 4u + 1: sk_s.glo[1] = (uint8_t)ui_clamp(sk_s.glo[1] + d * 3, 0, 127); break;
+            case PG_GLO * 4u + 2: sk_s.glo[2] = (uint8_t)ui_clamp(sk_s.glo[2] + d * 3, 0, 127); break;
+            case PG_GLO * 4u + 3: sk_s.glo[3] = (uint8_t)ui_clamp(sk_s.glo[3] + d, 0, 5); break;
             default: break;
             }
             if (ui.page == PG_ENV)
@@ -371,10 +416,11 @@ static void ui_input(uint32_t now)
         uint32_t lvl = 0;
         if ((i == SB_EDIT && ui.page == PG_EDIT) || (i == SB_SEQ && ui.page == PG_PHYS) || (i == SB_HOME && ui.page == PG_HOME) ||
             (i == SB_PLAY && sk_s.hold) || (i == SB_FX && ui.page == PG_FX) || (i == SB_SCL && ui.page == PG_SCL) ||
-            (i == SB_ENV && ui.page == PG_ENV) || (i == SB_LFO && ui.page == PG_LFO) || (i == SB_SAVE && ui.page == PG_SAVE))
+            (i == SB_ENV && ui.page == PG_ENV) || (i == SB_LFO && ui.page == PG_LFO) || (i == SB_SAVE && ui.page == PG_SAVE) ||
+            (i == SB_ARP && sk_s.arp[0]) || (i == SB_GLO && sk_gl.on))
             lvl = 3;
         else if (i == SB_EDIT || i == SB_SEQ || i == SB_HOME || i == SB_PLAY || i == SB_OCTDN || i == SB_OCTUP || i == SB_FX ||
-                 i == SB_SCL || i == SB_ENV || i == SB_LFO || i == SB_SAVE)
+                 i == SB_SCL || i == SB_ENV || i == SB_LFO || i == SB_SAVE || i == SB_ARP || i == SB_GLO)
             lvl = 1;
         sk_led_btn(i, lvl);
     }
@@ -475,6 +521,13 @@ static void ui_panel(uint32_t now)
                 if (sv.slot[ui.slot][0]) { b[0] = 'B'; ui_num(b + 1, sv.slot[ui.slot][1] % SK_NBIOME + 1u); }
                 else b[0] = '-', b[1] = 0;
                 break;
+            case PG_ARP * 4u + 0: { const char *m = SK_ARP_NAME[sk_s.arp[0] % 7u]; int k; for (k = 0; m[k]; k++) b[k] = m[k]; b[k] = 0; frac = sk_s.arp[0] * 255 / 6; break; }
+            case PG_ARP * 4u + 1: { const char *m = SK_ARP_RATE[sk_s.arp[1] % 5u]; int k; for (k = 0; m[k]; k++) b[k] = m[k]; b[k] = 0; frac = sk_s.arp[1] * 255 / 4; break; }
+            case PG_ARP * 4u + 2: { char *e = ui_num(b, sk_s.arp[2]); e[0] = ' '; e[1] = 'o'; e[2] = 'c'; e[3] = 't'; e[4] = 0; frac = (sk_s.arp[2] - 1) * 127; break; }
+            case PG_ARP * 4u + 3: v = sk_s.arp[3]; frac = v * 2; ui_num(b, v * 100 / 127); break;
+            case PG_GLO * 4u + 0: { char *e = ui_num(b, 4 * (sk_s.glo[0] % 8u + 1u)); e[0] = ' '; e[1] = 'b'; e[2] = 'a'; e[3] = 'r'; e[4] = 0; frac = sk_s.glo[0] * 255 / 7; break; }
+            case PG_GLO * 4u + 1: case PG_GLO * 4u + 2: v = sk_s.glo[i]; frac = v * 2; ui_num(b, v * 100 / 127); break;
+            case PG_GLO * 4u + 3: { const char *m = UI_AURA[sk_s.glo[3] % 6u]; int k; for (k = 0; m[k]; k++) b[k] = m[k]; b[k] = 0; frac = sk_s.glo[3] * 255 / 5; break; }
             default: { const char *m = sv.slot[ui.slot][0] ? "full" : "empty"; int k; for (k = 0; m[k]; k++) b[k] = m[k]; b[k] = 0; frac = sv.slot[ui.slot][0] ? 255 : 0; break; }
             }
         } else {
@@ -519,6 +572,23 @@ static void ui_hud(uint32_t now)
     fb_text_halo(FB_W - 6 - fb_text_w(b), 4, b, sk_s.hold ? C_YELLOW : C_INK2, C_BG);
     if (sk_s.hold)
         fb_text_halo(FB_W - 6 - fb_text_w("HOLD"), 18, "HOLD", C_YELLOW, C_BG);
+    if (sk_gv.on) {                                                  /* GLOW and where the loop is */
+        p = b;
+        *p++ = 'G'; *p++ = 'L'; *p++ = 'O'; *p++ = 'W'; *p++ = ' ';
+        p = ui_num(p, sk_gv.bar);
+        *p++ = '/';
+        p = ui_num(p, sk_gv.bars);
+        fb_text_halo(6, 18, b, C_YELLOW, C_BG);
+    }
+    if (sk_s.arp[0]) {
+        const char *m = SK_ARP_NAME[sk_s.arp[0] % 7u];
+        p = b;
+        *p++ = 'A'; *p++ = 'R'; *p++ = 'P'; *p++ = ' ';
+        while (*m)
+            *p++ = *m++;
+        *p = 0;
+        fb_text_halo(6, sk_gv.on ? 30 : 18, b, C_CYAN, C_BG);
+    }
     if (ui.page != PG_HOME)
         fb_text_halo((FB_W - fb_text_w(UI_PGNAME[ui.page])) / 2, 4, UI_PGNAME[ui.page], C_INK2, C_BG);
     if (now - ui.toast_t < 1800u && ui.toast[0]) {

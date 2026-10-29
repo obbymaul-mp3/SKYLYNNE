@@ -35,6 +35,8 @@ static const uint8_t SC_TINT[20][5] = {
     {0, 0, 0, 0, 128}, {130, 120, 110, 90, 90}, {255, 170, 130, 70, 128}, {20, 30, 60, 160, 55},       /* Minas Tirith */
 };
 static uint8_t sc_var;
+static uint8_t sc_tint0[5], sc_pal_id;   /* the biome's own tint, and its palette, for putting the sky back */
+static const uint8_t SK_STORM[5] = {30, 40, 90, 80, 92};
 static uint8_t sc_world;                 /* the biome's world: 0 the city, 1 the cathedral (palette 3), 2 the deep (palette 4) */
 
 enum { SV_SIT, SV_POINT, SV_TIDY, SV_SMOKE };
@@ -94,6 +96,9 @@ static struct {
     uint32_t t0;
 } sc_in;
 
+static void sc_arm(int sx, int sy, int tx, int ty, uint8_t c);
+#include "sk_glowfx.c"
+
 static void sc_theme(uint32_t biome)
 {
     uint32_t i;
@@ -101,7 +106,13 @@ static void sc_theme(uint32_t biome)
     sc_var = SC_VAR[biome % 36u];
     for (i = 0; i < 5; i++)
         fb_tint[i] = biome >= 16u ? SC_TINT[(biome - 16u) % 20u][i] : (i == 4 ? 128 : 0);
-    fb_theme(sc_world ? SC_PAL[biome % 36u] : SC_THEME[biome & 7u]);
+    for (i = 0; i < 5; i++)
+        sc_tint0[i] = fb_tint[i];
+    sc_pal_id = (uint8_t)(sc_world ? SC_PAL[biome % 36u] : SC_THEME[biome & 7u]);
+    if (sk_gv.on)
+        for (i = 0; i < 5; i++)
+            fb_tint[i] = SK_STORM[i];
+    fb_theme(sc_pal_id);
     for (i = 0; i < FB_PAL; i++)
         sc.refl[i] = (uint8_t)i;
     for (i = 0; i < 6; i++)
@@ -118,6 +129,7 @@ static void sc_theme(uint32_t biome)
 static void sc_update(uint32_t now)
 {
     int v;
+    sc_glow_update(now);
     if (!sc.init) {
         sc.init = 1;
         sc.next = now + 30000u;
@@ -151,8 +163,8 @@ static void sc_update(uint32_t now)
             }
         }
     }
-    if (sc_in.on)
-        sc.next = now + 60000u;                         /* (no tidying up during the intro) */
+    if (sc_in.on || sg.rise > 0)
+        sc.next = now + 30000u;                         /* (no tidying up during the intro) */
     switch (sc.st) {
     case SV_POINT:
         if (now - sc.touch_t > 1800u) {
@@ -486,6 +498,10 @@ static void sc_figure(uint32_t now)
     int cx = px - 7, fl = sc_tri((int)(now >> 4)) >> 7;       /* the scarf's flutter, 0..1 */
     if (sc_in.on && sc_intro_fig(now))
         return;
+    if (sg.rise > 0) {
+        sc_glow_figure(now);
+        return;
+    }
     if (sc.st == SV_TIDY && age >= 250 && age < 3050) {      /* standing */
         int sw = age >= 650 && age < 2450;
         fb_rect(cx - 3, py - 10, 3, 10, C_F0);
@@ -781,6 +797,7 @@ static void sc_draw(uint32_t now)
         sc_shore();
         sc_city(now);
     }
+    sc_glow_sky(now);
     sc_reflect(now);
     sc_water(now);
     if (sc_world == 1)

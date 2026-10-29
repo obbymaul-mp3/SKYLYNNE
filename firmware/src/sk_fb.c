@@ -242,7 +242,7 @@ static uint16_t fb_dma[2][FB_W * FB_TS] SK_POOL;
 static uint8_t fb_full = 1;                       /* resend every tile at the next present */
 static int16_t fb_cx0, fb_cy0, fb_cx1 = FB_W, fb_cy1 = FB_H;   /* the clip rectangle */
 
-static uint8_t fb_cur[40][3], fb_tgt[40][3];     /* the palette now, and where it is going: R G B */
+static uint8_t fb_cur[48][3], fb_tgt[48][3];     /* the palette now, and where it is going: R G B */
 static uint8_t fb_fade_on, fb_started;
 static uint8_t fb_tint[5] = {0, 0, 0, 0, 128};    /* a preset's tint over its world's palette: r g b, how much (0..255), brightness (128 = as is) */
 

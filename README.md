@@ -19,6 +19,12 @@ The presets are grouped in worlds, and each world has its own sounds and its own
 
 The struck sounds (bell, forge, stomp, drip, harp, music box) are sparse by design.
 
+## ARP and GLO
+
+- **ARP** opens the arpeggiator on the selected voice (the other five carry on as they were; SELECT moves it to another voice). PATTERN: up, down, up-down, random, strum, even. RATE: 1/4, 1/8, 1/16, 1/16T, 1/32 of the BPM. RANGE: 1 to 3 octaves. GATE: note length. Pattern OFF (or a new preset) releases the voice.
+- **GLO** turns Glow on and off. The figure stands, rises and floats in a ball of energy, lightning crosses the sky, and the six voices play a heroic loop of 4 to 32 bars (LOOP) that builds in four stages: pads and roots, then voices, then lead and sparkle, then everything with hits. POWER sets how quickly it builds and how hard it hits, BOLTS how often the sky answers, AURA the colour (gold, white, blue, green, red, violet).
+- ARP and GLO settings are kept in the eight save slots.
+
 ![The cathedral's four presets over the deep's four](docs/images/worlds.png)
 
 ![Columbia, Babel, Lothlórien, Yharnam and Minas Tirith](docs/images/worlds2.png)

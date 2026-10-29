@@ -601,7 +601,7 @@ static void sk_glow_note(uint32_t i, int deg, uint32_t len, uint32_t vel, uint32
 {
     sk_voice_t *v = &sk_v[i];
     uint32_t h = sk_hard_of(i) + extra_hard;
-    vel = vel * (uint32_t)sk_s.level[i] / 80u;
+    vel = vel * (uint32_t)sk_s.level[i] * 3u / 320u;                 /* (a full loop is loud: a little under the usual) */
     if (vel > 127u)
         vel = 127u;
     sk_pan(v, sk_s.pan[i]);
@@ -712,6 +712,16 @@ static void sk_load(const sk_biome_t *b)
     sk_s.fx[3] = 48;                                                  /* a soft top by default: about 4.6 kHz, two poles */
     sk_s.lfo[0] = 45;
     sk_s.lfo[1] = sk_s.lfo[2] = sk_s.lfo[3] = 64;
+    {
+        static uint8_t gdef;
+        if (!gdef) {                                                 /* Glow's own settings begin once and stay across presets */
+            gdef = 1;
+            sk_s.glo[0] = 3;
+            sk_s.glo[1] = 90;
+            sk_s.glo[2] = 70;
+            sk_s.glo[3] = 0;
+        }
+    }
     sk_s.arp[0] = 0;
     sk_s.arp[1] = 2;
     sk_s.arp[2] = 2;
