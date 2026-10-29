@@ -280,50 +280,154 @@ static void sc_shore(void)
     }
 }
 
-/* the city on the far shore: dark towers with neon windows, a few signs, a blinking mast, and a faint glow above it.
- * Voice 4 brings more windows on; DENSITY adds a few. The only vivid thing on the screen. */
+/* the city on the far shore, in three depths: a pale haze of far towers, the near skyline (stepped, spired, pitched and
+ * slanted roofs; one-pixel windows in rows; lit floors; neon edges, signs, rooftop tanks and masts; a beacon), and a
+ * quay of lamps along the water. Voice 4 lights more windows; DENSITY adds a few. Over it a faint glow. This is the only
+ * vivid part of the picture. */
+static int8_t sc_hmap[FB_W];
+
+static void sc_city_far(void)
+{
+    int x = SC_CX0 - 14, b = 0;
+    while (x < FB_W) {
+        uint32_t k = sc_hash((uint32_t)b * 4177u + 0x91u);
+        int w = 3 + (int)(k % 5u), h = 10 + (int)((k >> 6) % 26u), i;
+        if (x + w > FB_W)
+            w = FB_W - x;
+        for (i = 0; i < w; i++) {
+            int hh = h - ((k >> 14) % 3u == 0u && i == w - 1 ? 3 : 0);          /* a notch now and then */
+            fb_rect(x + i, SC_HZ - hh, 1, hh, C_F2);
+            if (hh > sc_hmap[x + i])
+                sc_hmap[x + i] = (int8_t)hh;
+        }
+        if ((k >> 18) % 4u == 0u)
+            fb_vline(x + w / 2, SC_HZ - h - 4, 4, C_F2);                         /* a far mast */
+        {
+            int wy;
+            for (wy = SC_HZ - h + 3; wy < SC_HZ - 3; wy += 3) {
+                uint32_t q = sc_hash((uint32_t)(x * 97 + wy * 13) + 0x3u);
+                if (q % 5u == 0u)
+                    fb_pset(x + 1 + (int)((q >> 8) % (uint32_t)(w > 2 ? w - 1 : 1)), wy, C_G0);          /* a window in the haze */
+            }
+        }
+        x += w - ((k >> 24) % 2u);
+        b++;
+    }
+}
+
+/* one near building at x, width w, height h; k its random word; col its main neon */
+static void sc_tower(int x, int w, int h, uint32_t k, uint8_t col, int lit, uint32_t now)
+{
+    int top = SC_HZ - h, type = (int)((k >> 4) % 6u), i, wy, wx, roof = top;
+    uint8_t col2 = (uint8_t)(C_N0 + ((k >> 9) & 3u));
+    /* the body, with a lit left edge and a dark right one */
+    fb_rect(x, top, w, h, C_F1);
+    fb_vline(x, top, h, C_F2);
+    fb_vline(x + w - 1, top, h, C_F0);
+    switch (type) {
+    case 1:                                                       /* stepped: a narrower upper tier */
+        fb_rect(x + 2, top - 5, w - 4, 5, C_F1);
+        fb_vline(x + 2, top - 5, 5, C_F2);
+        fb_hline(x + 2, top - 5, w - 4, C_F2);
+        roof = top - 5;
+        break;
+    case 2:                                                       /* pitched: a little gable */
+        for (i = 0; i < w / 2; i++)
+            fb_hline(x + i, top - 1 - i, w - 2 * i, i ? C_F1 : C_F2);
+        roof = top - w / 2;
+        break;
+    case 3:                                                       /* an art-deco spire */
+        fb_rect(x + w / 2 - 1, top - 6, 3, 6, C_F1);
+        fb_rect(x + w / 2, top - 11, 1, 5, C_F1);
+        fb_pset(x + w / 2, top - 12, C_F2);
+        roof = top - 12;
+        break;
+    case 4:                                                       /* a water tank on legs, and a vent */
+        fb_rect(x + 1, top - 3, 4, 3, C_F1);
+        fb_pset(x + 1, top - 4, C_F2);
+        fb_pset(x + 4, top - 4, C_F2);
+        fb_pset(x + w - 3, top - 1, C_F2);
+        roof = top - 4;
+        break;
+    case 5:                                                       /* a slanted roof */
+        for (i = 0; i < w; i++)
+            fb_vline(x + i, top - 1 - (w - 1 - i) / 3, 1 + (w - 1 - i) / 3, C_F1);
+        roof = top - 1 - (w - 1) / 3;
+        break;
+    default:
+        fb_hline(x, top, w, C_F2);                                 /* a flat roof with its parapet */
+        break;
+    }
+    for (i = 0; i < w; i++)
+        if (SC_HZ - roof > sc_hmap[x + i])
+            sc_hmap[x + i] = (int8_t)(SC_HZ - roof);
+    /* windows: one pixel, in rows of two columns' pitch; a few floors all lit, some dark panes in a faint tone */
+    for (wy = top + 3; wy < SC_HZ - 2; wy += 3) {
+        int floor_on = (int)(sc_hash((uint32_t)(wy * 31) + (k & 0xFFFFu)) % 9u) == 0;
+        for (wx = x + 2; wx < x + w - 1; wx += 2) {
+            uint32_t q = sc_hash((uint32_t)(wx * 131 + wy * 17) + 0x77u);
+            int on = floor_on || (int)(q % 100u) < lit;
+            if (!on && ((now >> 10) + (q >> 8)) % 113u == 0u)
+                on = 1;                                           /* a window now and then */
+            if (on)
+                fb_pset(wx, wy, ((q >> 14) & 7u) == 0u ? col2 : col);
+            else if ((q >> 20) % 3u == 0u)
+                fb_pset(wx, wy, C_F2);                            /* a dark pane */
+        }
+    }
+    if ((k >> 12) % 4u == 0u && h > 12) {                         /* a vertical neon edge */
+        fb_vline(x + w - 1, top + 2, h - 4, col);
+        if (x + w < FB_W)
+            for (wy = top + 2; wy < SC_HZ - 2; wy += 2)
+                if (fb[wy * FB_W + x + w] >= C_S0 && fb[wy * FB_W + x + w] <= C_S5)
+                    fb_pset(x + w, wy, C_G0);
+    }
+    if ((k >> 16) % 3u == 0u && w >= 7) {                         /* a sign: a bar in dashes and a small framed board */
+        int sy = top + 1;
+        for (i = 1; i < w - 1; i++)
+            if (((i + (int)(k >> 28)) & 3) != 3)
+                fb_pset(x + i, sy, col2);
+        if (h > 16) {
+            fb_hline(x + 1, sy + 3, w - 3, col);
+            fb_hline(x + 1, sy + 6, w - 3, col);
+            fb_vline(x + 1, sy + 3, 4, col);
+            fb_vline(x + w - 3, sy + 3, 4, col);
+        }
+    }
+    if ((k >> 20) % 5u == 0u) {                                   /* a mast with a blinking light */
+        int mx = x + w / 2;
+        fb_vline(mx, roof - 6, 6, C_F1);
+        if (((now >> 9) + (uint32_t)(k & 7u)) % 4u < 2u)
+            fb_pset(mx, roof - 7, C_N0);
+    }
+}
+
 static void sc_city(uint32_t now)
 {
-    int x = SC_CX0, e = sc_e[3], lit = 20 + (e * 30 >> 8) + (sk_s.mac[0] >> 4), b = 0;
-    static int8_t hmap[FB_W];
+    int x = SC_CX0, e = sc_e[3], lit = 20 + (e * 30 >> 8) + (sk_s.mac[0] >> 4), b = 0, i;
+    for (i = 0; i < FB_W; i++)
+        sc_hmap[i] = 0;
+    sc_city_far();
     while (x < FB_W - 2) {
         uint32_t k = sc_hash((uint32_t)b * 7919u + 0x31u);
-        int w = 5 + (int)(k % 7u), h = 7 + (int)((k >> 8) % 19u) + (x > 170 && x < 205 ? 6 : 0), i, wx, wy;
+        int w = 6 + (int)(k % 9u), h = 8 + (int)((k >> 8) % 20u) + (x > 170 && x < 205 ? 7 : 0);
         if (x + w > FB_W - 1)
             w = FB_W - 1 - x;
-        for (i = 0; i < w; i++)
-            hmap[x + i] = (int8_t)h;
-        fb_rect(x, SC_HZ - h, w, h, C_F1);
-        fb_hline(x, SC_HZ - h, w, C_F2);
-        for (wy = SC_HZ - h + 3; wy < SC_HZ - 3; wy += 4)
-            for (wx = x + 1; wx < x + w - 2; wx += 4) {
-                uint32_t q = sc_hash((uint32_t)(wx * 131 + wy * 17) + 0x77u);
-                int on = (int)(q % 100u) < lit;
-                if (!on && ((now >> 10) + (q >> 8)) % 97u == 0u)
-                    on = 1;                                   /* a window now and then */
-                if (on)
-                    fb_rect(wx, wy, 2, 2, (uint8_t)(C_N0 + ((q >> 12) & 3u)));
-            }
-        if ((k >> 20) % 3u == 0u && w > 6) {                  /* a neon sign */
-            uint8_t c = (uint8_t)(C_N0 + ((k >> 24) & 3u));
-            int sy = SC_HZ - h + 1;
-            fb_hline(x + 1, sy, w - 2, c);
-            if (h > 14)
-                fb_vline(x + w - 2, sy, 5, c);
-        }
-        if ((k >> 22) % 5u == 0u) {                           /* a mast with a blinking light */
-            fb_vline(x + w / 2, SC_HZ - h - 5, 5, C_F1);
-            if (((now >> 9) + (uint32_t)b) % 4u < 2u)
-                fb_pset(x + w / 2, SC_HZ - h - 6, C_N0);
-        }
+        if (w >= 4)
+            sc_tower(x, w, h, k, (uint8_t)(C_N0 + ((k >> 24) & 3u)), lit, now);
         x += w + (int)((k >> 16) % 2u);
         b++;
     }
+    /* the quay: a low wall with a row of lamps, and a few lit boats' lights */
+    fb_hline(SC_CX0 - 14, SC_HZ - 1, FB_W - SC_CX0 + 14, C_F0);
+    for (x = SC_CX0 - 12; x < FB_W - 1; x += 4)
+        if (((x >> 2) + (int)(now >> 11)) % 11u != 0u)
+            fb_pset(x, SC_HZ - 2, (x >> 2) % 3u == 0u ? C_N3 : ((x >> 2) % 3u == 1u ? C_N0 : C_N1));
     /* the glow: a faint dithered haze over the roofs, thicker over the tall ones, breathing very slowly */
     {
         int breathe = 2 + (sc_tri((int)(now >> 6)) >> 6);
-        for (x = SC_CX0; x < FB_W - 1; x++) {
-            int h = hmap[x], g = 6 + (h >> 2) + breathe + (e >> 6), i;
+        for (x = SC_CX0 - 14; x < FB_W - 1; x++) {
+            int h = sc_hmap[x], g = 6 + (h >> 2) + breathe + (e >> 6);
             for (i = 1; i <= g; i++) {
                 int y = SC_HZ - h - i;
                 if (y < 0)
