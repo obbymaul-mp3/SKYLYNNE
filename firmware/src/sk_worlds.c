@@ -70,7 +70,7 @@ static void sc_sun(void)
 static void sc_nave(uint32_t now)
 {
     int x, i, e = sc_e[3], lit = 38 + (e * 40 >> 8) + (sk_s.mac[0] >> 3) - (sc_var == 2 ? 22 : 0) + (sc_var == 1 ? 14 : 0);
-    static const int8_t TW[3][3] = {{120, 15, 60}, {204, 15, 50}, {232, 9, 38}};        /* x, width, height of a tower */
+    static const uint8_t TW[3][3] = {{120, 15, 60}, {204, 15, 50}, {230, 9, 38}};        /* x, width, height of a tower */
     for (i = 0; i < FB_W; i++)
         sc_hmap[i] = 0;
     /* far spires in the haze, both shores */
@@ -460,3 +460,5 @@ static void sc_fish(uint32_t now)
         fb_pset(x - 2, y + ((((now >> 7) + (uint32_t)i) & 1u) ? 1 : -1), C_STAR2);
     }
 }
+
+#include "sk_worlds2.c"

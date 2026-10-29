@@ -9,12 +9,19 @@ The presets are grouped in worlds, and each world has its own sounds and its own
 | World | Presets | Sounds (ALGORITHM walks this list) |
 | --- | --- | --- |
 | City at night | 1–8 | drone, whistle, sub, pad, air |
-| The cathedral | 9–12 | choir, brass, organ, bell, forge, stomp, drone, pad, sub, whistle |
-| The deep | 13–16 | whale, drip, glass, bell, pad, air, sub, drone, whistle, choir |
+| The cathedral (Anor Londo) | 9–12 | choir, brass, organ, bell, forge, stomp, drone, pad, sub, whistle |
+| The deep (Atlantis) | 13–16 | whale, drip, glass, bell, pad, air, sub, drone, whistle, choir |
+| Columbia | 17–20 | strings, choir, harp, glass, music box, organ, bell, pad, whistle, drone, sub, air |
+| Babel | 21–24 | brass, choir, forge, stomp, ascent (a tone that rises for ever), strings, organ, bell, drone, sub, pad, whistle |
+| Lothlórien | 25–28 | harp, choir, strings, whistle, glass, bell, drip, pad, air, music box, drone, sub |
+| Yharnam | 29–32 | music box, strings, organ, bell, choir, brass, forge, stomp, whistle, drone, sub, air |
+| Minas Tirith | 33–36 | brass, choir, strings, organ, bell, harp, stomp, whistle, pad, drone, sub, air |
 
-The struck sounds (bell, forge, stomp, drip) are very sparse by design.
+The struck sounds (bell, forge, stomp, drip, harp, music box) are sparse by design.
 
 ![The cathedral's four presets over the deep's four](docs/images/worlds.png)
+
+![Columbia, Babel, Lothlórien, Yharnam and Minas Tirith](docs/images/worlds2.png)
 
 A second page is a physics sequencer: a polygon spins, balls fall inside it, and every wall hit plays a note on
 one of the voices.
