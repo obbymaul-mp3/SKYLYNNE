@@ -96,6 +96,18 @@ int main(int argc, char **argv)
     t0 = clock();
     for (i = 0; i < total; i += SK_CTL) {
         uint8_t c0[SK_NV];
+        if (getenv("SK_SWITCH")) {                    /* SK_SWITCH=biome,second: change biome mid-run (analyse the wav afterwards) */
+            static int sw_to = -1;
+            static double sw_t = 0;
+            if (sw_to < 0)
+                sscanf(getenv("SK_SWITCH"), "%d,%lf", &sw_to, &sw_t);
+            if (sw_t >= 0 && i == (uint32_t)(sw_t * 44100.0) / SK_CTL * SK_CTL) {
+                sk_load(&SK_BIOMES[sw_to]);
+                if (!getenv("SK_KEEP"))
+                    sk_s.mute = 63;                   /* nothing new sounds: what is left is the old biome (SK_KEEP: let it play) */
+                sw_t = -1;
+            }
+        }
         memcpy(c0, (const void *)sk_ui.cnt, SK_NV);
         if (getenv("SK_FRZ") && i == (uint32_t)(atof(getenv("SK_FRZ")) * 44100.0) / SK_CTL * SK_CTL)
             sk_gm.frz = 1;
