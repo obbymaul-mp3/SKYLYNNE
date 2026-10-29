@@ -69,7 +69,8 @@ static void sk_space(void)
     if (sk_f.dfb > 24000)
         sk_f.dfb = 24000;
     sk_f.dwet = (int32_t)s * 85 * (int32_t)sk_s.fx[1] >> 6;            /* 0 .. 0.33, x0 .. x2 */
-    sk_f.gwet = (int32_t)s * 150 * (int32_t)sk_s.fx[2] >> 6;           /* CLOUD */
+    /* CLOUD: off in the middle (the default); turned up, a faint cloud of the biome's own grains blooms in the room */
+    sk_f.gwet = sk_s.fx[2] > 64u ? (int32_t)s * 150 * (((int32_t)sk_s.fx[2] - 64) * 2) >> 6 : 0;
     if (sk_gm.on) {                                                    /* REC: the grains are the instrument */
         int32_t w = 13000 + (int32_t)sk_s.grn[2] * 100;
         if (sk_f.gwet < w)
@@ -275,7 +276,7 @@ static void sk_grains(const int32_t *in, int32_t *ol, int32_t *or_, uint32_t n)
             sk_f.gnext--;
         } else {
             sk_f.gnext = per / 2u + (sk_grand() % (per ? per : 1u));
-            if (sk_s.mac[3] > 8u || sk_gm.on)
+            if ((sk_s.mac[3] > 8u && sk_s.fx[2] > 64u) || sk_gm.on)
                 sk_grain_spawn();
         }
         for (k = 0; k < SK_NG; k++) {
