@@ -68,6 +68,21 @@ int main(int argc, char **argv)
     uint32_t strikes[SK_NV] = {0};
     sk_load(&SK_BIOMES[bi]);
     sk_c.rnd = 12345;
+    if (getenv("SK_ARP")) {                       /* SK_ARP=pattern,rate,oct,gate  SK_SEL=voice */
+        int a[4] = {1, 2, 2, 50};
+        sscanf(getenv("SK_ARP"), "%d,%d,%d,%d", &a[0], &a[1], &a[2], &a[3]);
+        for (int q = 0; q < 4; q++)
+            sk_s.arp[q] = (uint8_t)a[q];
+        if (getenv("SK_SEL"))
+            sk_s.sel = (uint8_t)atoi(getenv("SK_SEL"));
+    }
+    if (getenv("SK_GLOW")) {                      /* SK_GLOW=loop,power */
+        int g[2] = {0, 90};
+        sscanf(getenv("SK_GLOW"), "%d,%d", &g[0], &g[1]);
+        sk_s.glo[0] = (uint8_t)g[0];
+        sk_s.glo[1] = (uint8_t)g[1];
+        sk_glow_set(1);
+    }
     if (getenv("SK_MUTE"))
         sk_s.mute = (uint8_t)atoi(getenv("SK_MUTE"));
     sk_f.master = 3000;
