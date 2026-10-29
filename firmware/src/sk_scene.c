@@ -21,7 +21,11 @@
 
 static const uint8_t SC_COL[SK_NV] = {C_PINK, C_CYAN, C_YELLOW, C_EMBER, C_GREEN, C_ACC};     /* the voices' colours */
 static const int16_t SC_AIM[SK_NV][2] = {{70, 30}, {150, 38}, {196, 50}, {170, 100}, {60, 90}, {150, 150}};
-static const uint8_t SC_THEME[8] = {1, 0, 0, 2, 0, 2, 2, 1};      /* a biome's sky: 0 slate night, 1 dusk haze, 2 mist */
+static const uint8_t SC_THEME[8] = {1, 0, 0, 2, 0, 2, 2, 1};      /* a city biome's sky: 0 slate night, 1 dusk haze, 2 mist */
+static const uint8_t SC_PAL[16] = {0, 0, 0, 0, 0, 0, 0, 0, 3, 5, 6, 7, 4, 8, 9, 10};   /* a biome's palette (sk_fb.c); 0..7 as SC_THEME */
+static const uint8_t SC_VAR[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 1, 2, 3};     /* its look within its world */
+static uint8_t sc_var;
+static uint8_t sc_world;                 /* the biome's world: 0 the city, 1 the cathedral (palette 3), 2 the deep (palette 4) */
 
 enum { SV_SIT, SV_POINT, SV_TIDY, SV_SMOKE };
 
@@ -83,7 +87,9 @@ static struct {
 static void sc_theme(uint32_t biome)
 {
     uint32_t i;
-    fb_theme(SC_THEME[biome & 7u]);
+    sc_world = SK_BIOMES[biome % SK_NBIOME].world;
+    sc_var = SC_VAR[biome & 15u];
+    fb_theme(sc_world ? SC_PAL[biome & 15u] : SC_THEME[biome & 7u]);
     for (i = 0; i < FB_PAL; i++)
         sc.refl[i] = (uint8_t)i;
     for (i = 0; i < 6; i++)
@@ -578,7 +584,7 @@ static void sc_fireflies(uint32_t now)
 {
     static const uint8_t FC[8] = {C_EMBER, C_PINK, C_EMBER, C_EMBER, C_PINK, C_EMBER, C_YELLOW, C_EMBER};
     int i, v;
-    for (i = 0; i < 18; i++) {
+    for (i = 0; i < (sc_world ? 0 : 18); i++) {
         uint32_t k = sc_hash((uint32_t)i * 7919u + 0x2Bu);
         int bx = (int)(k % 236u) + 2, by = 80 + (int)((k >> 8) % 104u);
         int x = bx + ((sc_tri((int)(now >> 5) + (int)(k >> 16)) - 128) >> 3);
@@ -729,6 +735,8 @@ static void sc_foreground(void)
     fb_checker(204, 108, 24, 8, C_F1);
 }
 
+#include "sk_worlds.c"
+
 static void sc_intro_proj(uint32_t now);
 static void sc_draw(uint32_t now)
 {
@@ -737,17 +745,41 @@ static void sc_draw(uint32_t now)
         fb_fade();
     fb_unclip();
     sc_sky();
-    sc_aurora(now);
-    sc_stars(now);
-    sc_moon();
-    sc_comet(now);
-    sc_mist(now);
-    sc_shore();
-    sc_city(now);
+    if (sc_world == 1) {                                  /* the cathedral */
+        sc_sun();
+        sc_rays(now, 172, 40, -30 - (sc_e[0] >> 4), 26, (sc_var == 2 ? 2 : 4) + (sc_e[0] >> 6), 40 + (sc_e[0] >> 2));
+        sc_mist(now);
+        sc_shore();
+        sc_nave(now);
+    } else if (sc_world == 2) {                           /* the deep */
+        sc_surface(now);
+        sc_rays(now, 180, 0, -10, 30, (sc_var == 2 ? 1 : sc_var == 3 ? 6 : 3) + (sc_e[0] >> 6), 70 + (sc_e[0] >> 2));
+        sc_snow(now);
+        sc_fish(now);
+        sc_mist(now);
+        sc_ruins(now);
+    } else {
+        sc_aurora(now);
+        sc_stars(now);
+        sc_moon();
+        sc_comet(now);
+        sc_mist(now);
+        sc_shore();
+        sc_city(now);
+    }
     sc_reflect(now);
     sc_water(now);
-    sc_foreground();
+    if (sc_world == 1)
+        sc_terrace();
+    else if (sc_world == 2)
+        sc_ledge(now);
+    else
+        sc_foreground();
     sc_figure(now);
+    if (sc_world == 1)
+        sc_motes(now);
+    else if (sc_world == 2)
+        sc_bubbles(now);
     sc_fireflies(now);
     if (sc_in.on)
         sc_intro_proj(now);

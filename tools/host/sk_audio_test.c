@@ -35,6 +35,12 @@ static int tone(int type, int note, const char *path)
     }
     (void)buf;
     {
+        double ss = 0; int pk = 0;
+        for (i = 0; i < total * 2; i++) { int a = abs(pcm[i]); if (a > pk) pk = a; ss += (double)pcm[i] * pcm[i]; }
+        printf("tone %s note %d: peak %d (%.1f dBFS) rms %.0f (%.1f dBFS)\n", SK_TYPE_NAME[type], note, pk,
+               20 * log10(pk / 32767.0 + 1e-9), sqrt(ss / (total * 2.0)), 20 * log10(sqrt(ss / (total * 2.0)) / 32767.0 + 1e-9));
+    }
+    {
         FILE *f = fopen(path, "wb");
         uint32_t n = total * 4, v;
         fwrite("RIFF", 1, 4, f); v = 36 + n; fwrite(&v, 4, 1, f);
@@ -62,6 +68,8 @@ int main(int argc, char **argv)
     uint32_t strikes[SK_NV] = {0};
     sk_load(&SK_BIOMES[bi]);
     sk_c.rnd = 12345;
+    if (getenv("SK_MUTE"))
+        sk_s.mute = (uint8_t)atoi(getenv("SK_MUTE"));
     sk_f.master = 3000;
     t0 = clock();
     for (i = 0; i < total; i += SK_CTL) {
