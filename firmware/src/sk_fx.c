@@ -47,7 +47,7 @@ static struct {
     uint32_t gwp, gnext, gseed;          /* the grains */
     int32_t gwet;
     sk_grain_t gr[SK_NG];
-    int32_t mlow[2], dc[2];              /* the master */
+    int32_t mlow[2], mlow2[2], dc[2];    /* the master */
     uint32_t master;                     /* MASTER, Q12 (the pot) */
     uint8_t ready;
 } sk_f;
@@ -278,7 +278,12 @@ static void sk_render(int32_t *out, uint32_t n)
 {
     int32_t l[SK_CTL], r[SK_CTL], rv[SK_CTL], gb[SK_CTL], dl[SK_CTL], wl[SK_CTL], wr[SK_CTL];
     uint32_t i;
-    int32_t hc = 32767 - (int32_t)sk_s.fx[3] * 250;
+    int32_t hc;
+    {                                                                   /* HIGH CUT: 16 kHz down to 600 Hz, exponentially; two poles */
+        static const uint16_t HC[17] = {29415, 27635, 25510, 23149, 20673, 18198, 15816, 13594, 11575, 9777, 8203, 6845, 5685, 4703, 3879, 3191, 2685};
+        uint32_t f = sk_s.fx[3], k = f >> 3, fr = f & 7u;
+        hc = (int32_t)HC[k] + (((int32_t)HC[k + 1u] - (int32_t)HC[k]) * (int32_t)fr >> 3);
+    }
     if (!sk_f.ready) {
         sk_f.ready = 1;
         sk_f.dcur = sk_f.dtgt = (int32_t)(sk_c.steplen << 8);
@@ -306,8 +311,10 @@ static void sk_render(int32_t *out, uint32_t n)
         b -= sk_f.dc[1];
         sk_f.mlow[0] += sk_q15(a - sk_f.mlow[0], hc);                  /* HIGH CUT: a one-pole low-pass over the whole mix */
         sk_f.mlow[1] += sk_q15(b - sk_f.mlow[1], hc);
-        a = sk_f.mlow[0];
-        b = sk_f.mlow[1];
+        sk_f.mlow2[0] += sk_q15(sk_f.mlow[0] - sk_f.mlow2[0], hc);
+        sk_f.mlow2[1] += sk_q15(sk_f.mlow[1] - sk_f.mlow2[1], hc);
+        a = sk_f.mlow2[0];
+        b = sk_f.mlow2[1];
         a = (a * (int32_t)sk_f.master) >> 12;
         b = (b * (int32_t)sk_f.master) >> 12;
         a = (a * (int32_t)sk_fade) >> 12;

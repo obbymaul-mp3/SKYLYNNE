@@ -126,11 +126,21 @@ static struct {
     int8_t atk[SK_NV], rel[SK_NV];       /* ENV page: the swell and the fade, -6..+6 */
     int8_t gli[SK_NV];
     uint8_t crv[SK_NV];
+    uint8_t arp[4];                      /* ARP page: PATTERN (0 off), RATE, RANGE (octaves), GATE */
+    uint8_t glo[4];                      /* GLO page: LOOP (4 .. 32 bars in fours), POWER, BOLTS, AURA */
 } sk_s;
 
 static struct {
     uint32_t step, clk, rnd, steplen, fall, bar;
 } sk_c;
+
+/* Glow: the whole scene powers up and a heroic loop takes over the six voices (the conductor waits). What the screen reads: */
+static struct { uint8_t on; uint32_t n; } sk_gl;
+static volatile struct { uint8_t on, level, cnt, bar, bars; } sk_gv;
+/* the arpeggiator: it takes over the selected voice's notes */
+static struct { uint32_t clk, k; uint8_t voice; } sk_ar;
+static const char *const SK_ARP_NAME[7] = {"OFF", "UP", "DOWN", "UP-DN", "RANDOM", "STRUM", "EVEN"};
+static const char *const SK_ARP_RATE[5] = {"1/4", "1/8", "1/16", "1/16T", "1/32"};
 
 /* what the screen reads (written by the audio side; single bytes) */
 static volatile struct {
@@ -233,15 +243,17 @@ static void sk_start(sk_voice_t *v, uint32_t type, uint32_t note, uint32_t len, 
         v->linc[1] = 12000u + (sk_rand() & 16383u);
         break;
     }
-    case VT_WHISTLE:
-        v->tinc[0] = SK_INC[nn];
-        v->f1 = (int32_t)(SK_W[nn > 90u ? 90u : nn] >> 14);
+    case VT_WHISTLE: {
+        uint32_t wn = nn > 82u ? 82u : nn;                               /* never above about 900 Hz: a whistle, not a scream */
+        v->tinc[0] = SK_INC[wn];
+        v->f1 = (int32_t)(SK_W[wn] >> 14);
         v->q = 900 - (int32_t)hard * 4;                                  /* a very narrow band: a tone, not a hiss */
-        v->br = 250 + (int32_t)hard * 6;
+        v->br = 160 + (int32_t)hard * 3;
         v->peak = 2400 + (int32_t)vel * 32;
         v->linc[0] = 380000u + (sk_rand() & 65535u);                     /* the vibrato: 4 .. 5.5 Hz */
         v->linc[1] = 9000u + (sk_rand() & 8191u);                        /* the vibrato's own swell */
         break;
+    }
     case VT_SUB:
         v->tinc[0] = SK_INC[nn];
         v->tinc[1] = SK_INC[nn] << 1;
@@ -264,7 +276,7 @@ static void sk_start(sk_voice_t *v, uint32_t type, uint32_t note, uint32_t len, 
             v->f3 = v->tf[2];
         }
         v->q = 2600 - (int32_t)hard * 8;                                 /* open vowels when bright, hollow when dark */
-        v->br = 40 + (int32_t)hard * 3;                                  /* the breath in the voice */
+        v->br = 28 + (int32_t)hard * 2;                                  /* the breath in the voice */
         v->peak = 2600 + (int32_t)vel * 36;
         v->linc[0] = 330000u + (sk_rand() & 65535u);
         v->linc[1] = 7000u + (sk_rand() & 8191u);
@@ -276,7 +288,7 @@ static void sk_start(sk_voice_t *v, uint32_t type, uint32_t note, uint32_t len, 
         const uint32_t *dt = type == VT_BRASS ? DET : DETS;
         for (k = 0; k < 3u; k++)
             v->tinc[k] = (uint32_t)(((uint64_t)SK_INC[nn] * dt[k]) >> 16);
-        v->lpk = type == VT_BRASS ? 900 + (int32_t)hard * 90 : 1500 + (int32_t)hard * 100;
+        v->lpk = type == VT_BRASS ? 800 + (int32_t)hard * 65 : 1200 + (int32_t)hard * 70;
         v->peak = type == VT_BRASS ? 2700 + (int32_t)vel * 40 : 2300 + (int32_t)vel * 34;
         v->linc[0] = (type == VT_BRASS ? 280000u : 350000u) + (sk_rand() & 32767u);
         v->linc[1] = 6000u + (sk_rand() & 8191u);
@@ -293,7 +305,7 @@ static void sk_start(sk_voice_t *v, uint32_t type, uint32_t note, uint32_t len, 
         v->br = type == VT_MBOX ? 60 + (int32_t)hard * 2 : 24 + (int32_t)hard;      /* the click of the pluck */
         v->idx = 0;
         v->peak = 3000 + (int32_t)vel * 40;
-        v->lpk = 9000 + (int32_t)hard * 150;                             /* how long the upper harmonics last */
+        v->lpk = 6000 + (int32_t)hard * 100;                             /* how long the upper harmonics last */
         break;
     }
     case VT_ASCENT:
@@ -323,7 +335,7 @@ static void sk_start(sk_voice_t *v, uint32_t type, uint32_t note, uint32_t len, 
         v->br = type == VT_FORGE ? 90 + (int32_t)hard * 3 : 0;           /* the click of the blow */
         v->idx = 0;
         v->peak = 3000 + (int32_t)vel * 40;
-        v->lpk = 3000 + (int32_t)hard * 160;                             /* how much of the top rings */
+        v->lpk = 1800 + (int32_t)hard * 90;                              /* how much of the top rings */
         break;
     }
     case VT_STOMP:
@@ -357,7 +369,7 @@ static void sk_start(sk_voice_t *v, uint32_t type, uint32_t note, uint32_t len, 
         break;
     }
     default:                                                              /* AIR */
-        v->f1 = (int32_t)(SK_W[nn > 90u ? 90u : nn] >> 14);
+        v->f1 = (int32_t)(SK_W[nn > 76u ? 76u : nn] >> 14);
         v->q = 3300 - (int32_t)hard * 16;
         {
             int32_t reg = 256 + (nn >= 57u ? -6 * ((int32_t)nn - 57) : 3 * (57 - (int32_t)nn));
@@ -412,9 +424,14 @@ static uint32_t sk_hard_of(uint32_t i)
 }
 
 /* ------------------------------------------------------------ the conductor --- */
+static void sk_glow_step(void);
 static void sk_step(void)
 {
     uint32_t i, st = sk_c.step++;
+    if (sk_gl.on) {
+        sk_glow_step();
+        return;
+    }
     const sk_biome_t *b = sk_s.b;
     uint32_t dens = sk_s.mac[0], mot = sk_s.mac[1];
     uint32_t dens_q8 = 77u + ((dens * 358u) >> 7);                    /* x0.3 .. x1.7 the chance */
@@ -434,6 +451,8 @@ static void sk_step(void)
         uint32_t note, vel;
         if (sk_s.mute & (1u << i))
             continue;
+        if (sk_s.arp[0] && i == sk_ar.voice)
+            continue;                                                 /* the arpeggiator has this one */
         if (!((((st + c->rot + sk_s.rot[i]) % n) * c->k) % n < c->k))
             continue;
         r = sk_rand();
@@ -494,6 +513,176 @@ static void sk_play(uint32_t i, uint32_t note, uint32_t vel)
 static void sk_steplen_set(void)
 {
     sk_c.steplen = 661500u / (sk_s.bpm ? sk_s.bpm : 90u);            /* a sixteenth: 44100 * 60 / (4 bpm) samples */
+    if (sk_gl.on)
+        sk_c.steplen = sk_c.steplen * 2u / 3u;                       /* Glow is faster: the same bpm feels 1.5 times as quick */
+}
+
+/* ------------------------------------------------------------ the arpeggiator --- */
+/* one arpeggiator step on the selected voice: a triad (and its octaves) of the scale, walked by the pattern; the chord
+ * root moves through a I - V - vi - IV of the scale every two bars when MOTION is up */
+static uint32_t sk_arp_interval(void)
+{
+    static const uint8_t NUM[5] = {12, 6, 3, 2, 3}, DEN[5] = {3, 3, 3, 3, 6};   /* in thirds of a sixteenth: 4, 2, 1, 2/3, 1/2 */
+    uint32_t r = sk_s.arp[1] > 4u ? 4u : sk_s.arp[1];
+    uint32_t iv = sk_c.steplen / 3u * NUM[r] / (DEN[r] / 3u);
+    if (sk_s.arp[0] == 5u)
+        iv /= 3u;                                                    /* a strum is a quick roll */
+    return iv < 600u ? 600u : iv;
+}
+
+static void sk_arp_step(uint32_t iv)
+{
+    static const uint8_t PROG[4] = {0, 4, 5, 3};
+    static const uint8_t EV[8] = {0, 2, 1, 3, 2, 4, 3, 5};
+    uint32_t i = sk_ar.voice, pat = sk_s.arp[0], oct = sk_s.arp[2] < 1u ? 1u : sk_s.arp[2] > 3u ? 3u : sk_s.arp[2];
+    uint32_t n = 3u * oct + 1u, k = sk_ar.k++, t, r, gate, fac, vel, len = sk_s.len ? sk_s.len : 7u;
+    int root = sk_s.mac[1] > 24u ? (int)(PROG[(sk_c.step / 32u) & 3u] % len) : 0, deg;
+    const sk_vcfg_t *c = &sk_s.b->v[i];
+    sk_voice_t *v = &sk_v[i];
+    if (sk_s.mute & (1u << i))
+        return;
+    switch (pat) {
+    case 1: t = k % n; break;
+    case 2: t = n - 1u - (k % n); break;
+    case 3: { uint32_t m = 2u * n - 2u, j = k % m; t = j < n ? j : m - j; break; }
+    case 4: t = sk_rand() % n; break;
+    case 5: { uint32_t cyc = n + 3u, j = k % cyc; if (j >= n) return; t = j; break; }
+    default: t = (EV[k & 7u] + (k >> 3) * 0u) % n; break;
+    }
+    r = t / 3u;
+    deg = root + (int)((t % 3u) * 2u) + (int)(r * len);
+    fac = 64u + ((uint32_t)sk_s.arp[3] * 960u) / 127u;                 /* the gate: x0.25 .. x4 of the step, Q8 */
+    gate = iv * fac >> 8;
+    if (gate < 3000u)
+        gate = 3000u;
+    vel = (uint32_t)c->vel + (pat != 6u && (k & 3u) == 0u ? 10u : 0u) + (sk_rand() & 7u);
+    vel = vel * (uint32_t)sk_s.level[i] / 80u;
+    if (vel > 127u)
+        vel = 127u;
+    sk_pan(v, sk_s.pan[i] + (int)(sk_rand() % 9u) - 4);
+    if (v->act && !SK_PERC(sk_s.type[i]))
+        v->amp >>= 1;                                                /* every note is a fresh swell, not a glide */
+    sk_start(v, sk_s.type[i], sk_note_of(i, deg), 1u, vel, sk_hard_of(i), SK_PERC(sk_s.type[i]) && gate < 40000u ? 40000u : gate);
+    v->gli = 5;                                                      /* (the pitch moves at once) */
+    sk_ui.note[i] = (uint8_t)sk_note_of(i, deg);
+    sk_ui.lit[i] = 255;
+    sk_ui.cnt[i]++;
+}
+
+static void sk_arp_tick(uint32_t n)
+{
+    uint32_t iv;
+    if (!sk_s.arp[0]) {
+        sk_ar.clk = 0;
+        sk_ar.k = 0;
+        return;
+    }
+    if (sk_ar.voice != sk_s.sel) {                                    /* SELECT moves the arpeggio to the new voice */
+        sk_ar.voice = sk_s.sel;
+        sk_ar.k = 0;
+    }
+    iv = sk_arp_interval();
+    sk_ar.clk += n;
+    while (sk_ar.clk >= iv) {
+        sk_ar.clk -= iv;
+        sk_arp_step(iv);
+    }
+}
+
+/* ------------------------------------------------------------------- Glow --- */
+/* A heroic loop of 4 to 32 bars (a bar is 16 steps; one chord a bar: I V vi IV I vi IV V of the scale) played by the six
+ * voices in their own registers. Every voice has a part by its kind: LOW holds the root, PAD the chord, LEAD sings a rising
+ * line, SPARKLE rolls the chord upward, HIT strikes on the beat. The loop builds in four stages: the pads and the roots,
+ * then the voices, then the lead and the sparkle, then everything with the hits. */
+static const uint8_t SK_CLASS[VT_N] = {0, 2, 0, 1, 1, 1, 2, 1, 3, 4, 4, 3, 2, 1, 1, 3, 3, 1};
+/* 0 LOW  1 PAD  2 LEAD  3 SPARKLE  4 HIT, by voice kind (VT_*) */
+
+static void sk_glow_note(uint32_t i, int deg, uint32_t len, uint32_t vel, uint32_t extra_hard, uint32_t ring)
+{
+    sk_voice_t *v = &sk_v[i];
+    uint32_t h = sk_hard_of(i) + extra_hard;
+    vel = vel * (uint32_t)sk_s.level[i] * 3u / 320u;                 /* (a full loop is loud: a little under the usual) */
+    if (vel > 127u)
+        vel = 127u;
+    sk_pan(v, sk_s.pan[i]);
+    sk_start(v, sk_s.type[i], sk_note_of(i, deg), len, vel, h > 127u ? 127u : h, ring ? ring : sk_c.steplen);
+    sk_ui.note[i] = (uint8_t)sk_note_of(i, deg);
+    sk_ui.lit[i] = 255;
+    sk_ui.cnt[i]++;
+}
+
+static void sk_glow_step(void)
+{
+    static const uint8_t PROG[8] = {0, 4, 5, 3, 0, 5, 3, 4};
+    uint32_t bars = 4u * ((uint32_t)sk_s.glo[0] % 8u + 1u), st = sk_gl.n++ % (bars * 16u);
+    uint32_t b = st >> 4, s = st & 15u, lvl = b * 4u / bars, pw = sk_s.glo[1], i, pad = 0, len = sk_s.len ? sk_s.len : 7u;
+    int root = (int)(PROG[b & 7u] % len), k;
+    if (pw >= 96u && lvl < 3u)
+        lvl++;
+    if (pw < 32u && lvl > 0u)
+        lvl--;
+    sk_gv.level = (uint8_t)lvl;
+    sk_gv.bar = (uint8_t)(b + 1u);
+    sk_gv.bars = (uint8_t)bars;
+    sk_ui.step = (uint8_t)s;
+    for (i = 0; i < SK_NV; i++) {
+        const sk_vcfg_t *c = &sk_s.b->v[i];
+        uint32_t cl = SK_CLASS[sk_s.type[i] % VT_N], vel = (uint32_t)c->vel + lvl * 4u + (pw >> 4);
+        if ((sk_s.mute & (1u << i)) || (sk_s.arp[0] && i == sk_ar.voice))
+            continue;
+        switch (cl) {
+        case 0:                                                      /* LOW: the root, a bar long */
+            if (s == 0)
+                sk_glow_note(i, root - (int)len, 17, vel + 6u, 0, 0);
+            break;
+        case 1: {                                                    /* PAD: a tone of the chord a bar long */
+            static const uint8_t TN[4] = {0, 4, 2, 7};
+            uint32_t pi = pad++;
+            if (s == 0 && (lvl >= 1u || pi == 0u))
+                sk_glow_note(i, root + (int)(TN[pi & 3u] == 7u ? len : TN[pi & 3u]), 18, vel, 8, 0);
+            break;
+        }
+        case 2:                                                      /* LEAD: a line that climbs */
+            if (lvl >= 2u) {
+                if (s == 0)
+                    sk_glow_note(i, root + 4, lvl == 3u ? 6 : 8, vel + 4u, 22, 0);
+                else if (s == 8 && lvl == 2u)
+                    sk_glow_note(i, root + (int)len, 8, vel + 4u, 22, 0);
+                else if (s == 6 && lvl == 3u)
+                    sk_glow_note(i, root + (int)len, 4, vel + 6u, 22, 0);
+                else if (s == 10 && lvl == 3u)
+                    sk_glow_note(i, root + (int)len + 2, 6, vel + 8u, 22, 0);
+            }
+            break;
+        case 3:                                                      /* SPARKLE: the chord rolled upward */
+            if (lvl >= 2u && (s & (lvl == 3u ? 1u : 3u)) == 0u) {
+                static const uint8_t AR[6] = {0, 2, 4, 7, 4, 2};
+                k = AR[((s >> 1) + b) % 6u];
+                sk_glow_note(i, root + (k == 7 ? (int)len : k), 4, vel - 6u, 6, 70000u);
+            }
+            break;
+        default:                                                     /* HIT: the beat, and a fill at the end of the loop */
+            if (lvl >= 2u && (s == 0 || (lvl == 3u && s == 8) || (b == bars - 1u && s >= 10u && (s & 1u) == 0u)))
+                sk_glow_note(i, root - (int)len, 6, vel + 4u, 0, 70000u);
+            break;
+        }
+    }
+    if (s == 0 && lvl >= 2u)
+        sk_gv.cnt++;                                                 /* the sky answers each bar */
+    else if (lvl == 3u && s == 8)
+        sk_gv.cnt++;
+}
+
+static void sk_glow_set(uint32_t on)
+{
+    if (on == sk_gl.on)
+        return;
+    sk_gl.on = (uint8_t)on;
+    sk_gv.on = (uint8_t)on;
+    sk_gl.n = 0;
+    sk_c.step = 0;
+    sk_steplen_set();
+    sk_c.clk = sk_c.steplen;                                         /* the first step comes at once */
 }
 
 /* a biome begins (the voices keep sounding: nothing is cut) */
@@ -520,9 +709,23 @@ static void sk_load(const sk_biome_t *b)
     }
     sk_s.mute = 0;
     sk_s.fx[0] = sk_s.fx[1] = sk_s.fx[2] = 64;
-    sk_s.fx[3] = 40;                                                  /* a gentle high cut: the top is soft by default */
+    sk_s.fx[3] = 48;                                                  /* a soft top by default: about 4.6 kHz, two poles */
     sk_s.lfo[0] = 45;
     sk_s.lfo[1] = sk_s.lfo[2] = sk_s.lfo[3] = 64;
+    {
+        static uint8_t gdef;
+        if (!gdef) {                                                 /* Glow's own settings begin once and stay across presets */
+            gdef = 1;
+            sk_s.glo[0] = 3;
+            sk_s.glo[1] = 90;
+            sk_s.glo[2] = 70;
+            sk_s.glo[3] = 0;
+        }
+    }
+    sk_s.arp[0] = 0;
+    sk_s.arp[1] = 2;
+    sk_s.arp[2] = 2;
+    sk_s.arp[3] = 50;
     sk_s.shift = sk_s.walk = 0;
     sk_s.root = b->root;
     sk_s.len = b->len;
@@ -555,6 +758,7 @@ static void sk_tick(uint32_t n)
 {
     uint32_t i;
     if (!sk_s.hold) {
+        sk_arp_tick(n);
         sk_c.clk += n;
         while (sk_c.clk >= sk_c.steplen) {
             sk_c.clk -= sk_c.steplen;
@@ -1009,9 +1213,9 @@ static void sk_run_glass(sk_voice_t *v, int32_t *o, uint32_t n)
     v->lph[0] += v->linc[0] * n;
     w[0] = 15000;
     w[1] = 15000;
-    w[2] = 2500 + h * 55;
-    w[3] = 2500 + h * 55;
-    w[4] = h * 40;
+    w[2] = 1400 + h * 28;
+    w[3] = 1400 + h * 28;
+    w[4] = h * 12;
     for (k = 0; k < 5u; k++) {
         sk_glide(v, k, 10);
         inc[k] = v->inc[k];
