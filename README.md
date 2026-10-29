@@ -14,6 +14,8 @@ The presets are grouped in worlds, and each world has its own sounds and its own
 
 The struck sounds (bell, forge, stomp, drip) are very sparse by design.
 
+![The cathedral's four presets over the deep's four](docs/images/worlds.png)
+
 A second page is a physics sequencer: a polygon spins, balls fall inside it, and every wall hit plays a note on
 one of the voices.
 
