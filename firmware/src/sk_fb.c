@@ -272,6 +272,40 @@ static int fb_text(int x, int y, const char *s, uint8_t c)
         x += fb_glyph(&SK_FONT, (uint8_t)*s++, x, y, c);
     return x - x0;
 }
+/* the title's letters: 2x, with a wide tracking */
+static int fb_glyph2(const sk_font_t *f, uint8_t ch, int x, int y, uint8_t c)
+{
+    const sk_glyph_t *g = &f->g[ch];
+    const uint8_t *b;
+    int r, i;
+    if (!g->adv)
+        return 0;
+    b = f->bits + g->off;
+    for (r = 0; r < f->h; r++) {
+        uint32_t row = ((uint32_t)b[2 * r] << 8) | b[2 * r + 1];
+        for (i = 0; row; i++, row = (row << 1) & 0xFFFFu)
+            if (row & 0x8000u) {
+                fb_pset(x + 2 * i, y + 2 * r, c);
+                fb_pset(x + 2 * i + 1, y + 2 * r, c);
+                fb_pset(x + 2 * i, y + 2 * r + 1, c);
+                fb_pset(x + 2 * i + 1, y + 2 * r + 1, c);
+            }
+    }
+    return 2 * g->adv;
+}
+static int fb_text2_w(const char *s, int track)
+{
+    int w = 0;
+    for (; *s; s++)
+        w += 2 * SK_FONT.g[(uint8_t)*s].adv + track;
+    return w - track;
+}
+static void fb_text2_c(int cx, int y, const char *s, uint8_t c, int track)
+{
+    int x = cx - fb_text2_w(s, track) / 2;
+    while (*s)
+        x += fb_glyph2(&SK_FONT, (uint8_t)*s++, x, y, c) + track;
+}
 static int fb_text_w(const char *s)
 {
     int w = 0;
