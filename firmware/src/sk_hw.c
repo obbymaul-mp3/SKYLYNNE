@@ -25,6 +25,9 @@ static struct bootguard bootguard __attribute__((section(".noinit")));
 static uint8_t sk_safe;
 static uint32_t sk_stage __attribute__((section(".noinit")));      /* the boot's breadcrumb: survives a crash */
 #define CR_STAGE_SET(n) (sk_stage = (n))
+static volatile uint8_t sk_hush;          /* 1: the output is silent (a slot is being written) */
+static uint8_t sk_live;                   /* interrupts are on (the flash code must give them back only then) */
+#define SK_STORE_OFF 913408u              /* the top sector of the data area, just under the update loader's staging (decimal: the lint reads hex as an address) */
 extern void isr_timer5(void);
 extern void isr_alnk0(void);
 
@@ -62,6 +65,9 @@ void fm1_alnk0_irq(void)
         }
         us = (fm1_ticks() - t0) / FM1_TICKS_PER_US;
         load = us * 100u / (HALF_FRAMES * 1000000u / SK_FS);
+        if (sk_hush)
+            for (i = 0; i < HALF_WORDS; i++)
+                o[i] = 0;
         sk_cpu_pct = (sk_cpu_pct * 7u + load) / 8u;
         if (load > sk_cpu_max)
             sk_cpu_max = load;
@@ -109,6 +115,48 @@ static void sk_led_set(uint32_t id, uint32_t level)
 }
 static void sk_led_btn(uint32_t label, uint32_t level) { sk_led_set(SK_BTN_ID[label], level); }
 static void sk_led_key(uint32_t n, uint32_t level) { sk_led_set(14u + n, level); }
+
+/* ---------------------------------------------------------------- the saved slots --- */
+/* One 4 KB sector of the SPI flash holds the eight slots (the whole struct is rewritten at every save). The flash is off
+ * the bus while it erases (about 50 ms, 400 at most) and the interrupts are off with it, so the output is made silent
+ * first and the audio gets a few halves to run out on zeros. */
+static uint8_t sk_chk[sizeof sv];
+static int sk_store_read(void *dst, uint32_t n)
+{
+    int rc;
+    uint32_t f = irq_save();
+    rc = FL_FAR(fl_read_ram)(SK_STORE_OFF, (uint8_t *)dst, n);
+    if (sk_live)
+        irq_restore(f);
+    return rc ? -1 : 0;
+}
+
+static int sk_store_write(const void *src, uint32_t n)
+{
+    uint32_t took = 0, t, i;
+    int rc;
+    if (n > 4096u)
+        return -1;
+    sk_hush = 1;
+    t = fm1_ms;
+    while (fm1_ms - t < 20u)
+        ;
+    fm1_wdt_feed();
+    rc = fl_erase4k(SK_STORE_OFF, &took);
+    if (!rc)
+        rc = fl_write(SK_STORE_OFF, (const uint8_t *)src, n);
+    fm1_wdt_feed();
+    if (!rc) {
+        uint32_t f = irq_save();
+        rc = FL_FAR(fl_read_ram)(SK_STORE_OFF, sk_chk, n);
+        irq_restore(f);
+        for (i = 0; !rc && i < n; i++)
+            if (sk_chk[i] != ((const uint8_t *)src)[i])
+                rc = -5;
+    }
+    sk_hush = 0;
+    return rc ? -1 : 0;
+}
 
 /* ----------------------------------------------------------------- the screen --- */
 static void sk_lcd(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint16_t *p) { lcd_blit(x, y, w, h, p); }
@@ -221,6 +269,9 @@ static void sk_main(void)
     fm1_adc_init();
     CR_STAGE_SET(BS_SOUNDS);
     ui_init(0);
+    ui_store_load();                       /* (interrupts are still off: the flash is read bare) */
+    if (!sk_safe)
+        ui_intro_start();                  /* the opening: silent until it has panned down to the cliff */
     sk_s.bpm = SK_BIOMES[0].bpm;
     CR_STAGE_SET(BS_AUDIO);
     sk_master_boot();
@@ -234,8 +285,10 @@ static void sk_main(void)
     fm1_timer5_start(isr_timer5, 4);
     fm1_guard_lock_top();
     fm1_irq_enable_all();
+    sk_live = 1;
     fm1_delay_ms(30);
-    sk_splash(sk_safe ? 2500u : 900u);
+    if (sk_safe)
+        sk_splash(2500u);
     for (;;) {
         uint32_t m = fm1_ms, left;
         fm1_wdt_feed();

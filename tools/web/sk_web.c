@@ -83,9 +83,39 @@ static float out_l[1024], out_r[1024];
 static uint32_t dev_samples, last_ui, booted;
 static uint32_t web_cpu;
 
+/* the saved slots live in this buffer; the page keeps them in localStorage (web_store_set before web_boot to restore) */
+static uint8_t web_store[1024];
+static uint32_t web_store_len, web_store_gen;
+static int sk_store_read(void *dst, uint32_t n)
+{
+    uint32_t i;
+    if (!web_store_len || n > web_store_len)
+        return -1;
+    for (i = 0; i < n; i++)
+        ((uint8_t *)dst)[i] = web_store[i];
+    return 0;
+}
+static int sk_store_write(const void *src, uint32_t n)
+{
+    uint32_t i;
+    if (n > sizeof web_store)
+        return -1;
+    for (i = 0; i < n; i++)
+        web_store[i] = ((const uint8_t *)src)[i];
+    web_store_len = n;
+    web_store_gen++;
+    return 0;
+}
+WEB_EXPORT uint8_t *web_store_ptr(void) { return web_store; }
+WEB_EXPORT void web_store_set(uint32_t n) { web_store_len = n > sizeof web_store ? sizeof web_store : n; }
+WEB_EXPORT uint32_t web_store_len_get(void) { return web_store_len; }
+WEB_EXPORT uint32_t web_store_gen_get(void) { return web_store_gen; }
+
+WEB_EXPORT void web_intro(void) { ui_intro_start(); }          /* the opening: the page calls it for the instrument that plays */
 WEB_EXPORT void web_boot(void)
 {
     ui_init(0);
+    ui_store_load();
     booted = 1;
 }
 WEB_EXPORT float *web_out_l(void) { return out_l; }

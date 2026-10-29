@@ -16,7 +16,13 @@ class Skylynne extends AudioWorkletProcessor {
       try {
         const { instance } = await WebAssembly.instantiate(m.wasm, {});
         this.ex = instance.exports;
+        if (m.store && m.store.length) {
+          new Uint8Array(this.ex.memory.buffer, this.ex.web_store_ptr(), m.store.length).set(m.store);
+          this.ex.web_store_set(m.store.length);
+        }
+        this.storeGen = this.ex.web_store_gen_get();
         this.ex.web_boot();
+        this.ex.web_intro();
         if (m.master != null) this.ex.web_master(m.master | 0);
         this.port.postMessage({ type: "ready" });
       } catch (err) {
@@ -50,6 +56,11 @@ class Skylynne extends AudioWorkletProcessor {
         this.serial = s;
         msg.fb = new Uint32Array(ex.memory.buffer, ex.web_fb(), 57600).slice();
         transfer.push(msg.fb.buffer);
+      }
+      const g = ex.web_store_gen_get();
+      if (g !== this.storeGen) {            // a slot was saved: the page keeps the bytes
+        this.storeGen = g;
+        msg.store = new Uint8Array(ex.memory.buffer, ex.web_store_ptr(), ex.web_store_len_get()).slice();
       }
       this.port.postMessage(msg, transfer);
     }

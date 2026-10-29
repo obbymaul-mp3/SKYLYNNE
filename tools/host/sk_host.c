@@ -28,6 +28,28 @@ static void sk_lcd(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint16_
         }
 }
 static void sk_pump(void) {}
+/* the saved slots: a file, so that a second run can load what the first saved (SK_STORE=path) */
+static int sk_store_read(void *dst, uint32_t n)
+{
+    const char *p = getenv("SK_STORE");
+    FILE *f = p ? fopen(p, "rb") : NULL;
+    size_t got;
+    if (!f)
+        return -1;
+    got = fread(dst, 1, n, f);
+    fclose(f);
+    return got == n ? 0 : -1;
+}
+static int sk_store_write(const void *src, uint32_t n)
+{
+    const char *p = getenv("SK_STORE");
+    FILE *f = p ? fopen(p, "wb") : NULL;
+    if (!f)
+        return -1;
+    fwrite(src, 1, n, f);
+    fclose(f);
+    return 0;
+}
 #include "sk_fb.c"
 #include "sk_scene.c"
 #include "sk_phys.c"
@@ -104,10 +126,13 @@ int main(int argc, char **argv)
 {
     int a;
     ui_init(0);
+    ui_store_load();
     for (a = 1; a < argc; a++) {
         char *s = argv[a];
         if (!strncmp(s, "wait:", 5))
             run((uint32_t)atoi(s + 5));
+        else if (!strcmp(s, "intro"))
+            ui_intro_start();
         else if (!strncmp(s, "btn:", 4)) {
             int k;
             for (k = 0; k < SB_N; k++)
