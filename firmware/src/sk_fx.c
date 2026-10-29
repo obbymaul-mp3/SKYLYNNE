@@ -18,7 +18,7 @@ static const uint16_t SK_RVL[SK_RVN] = {1049, 1223, 1399, 1621, 1823, 2063, 2273
 #define SK_AP2 107
 #define SK_DLN 16384                     /* the delay's line, samples (a power of two): 0.37 s */
 #define SK_GRN 32768                     /* the grain buffer, samples: 0.74 s */
-#define SK_NG 10                         /* grains at once */
+#define SK_NG 16                         /* grains at once */
 
 static struct {
     int16_t line[SK_RVN][SK_RVMAX];
@@ -70,6 +70,11 @@ static void sk_space(void)
         sk_f.dfb = 24000;
     sk_f.dwet = (int32_t)s * 85 * (int32_t)sk_s.fx[1] >> 6;            /* 0 .. 0.33, x0 .. x2 */
     sk_f.gwet = (int32_t)s * 150 * (int32_t)sk_s.fx[2] >> 6;           /* CLOUD */
+    if (sk_gm.on) {                                                    /* REC: the grains are the instrument */
+        int32_t w = 13000 + (int32_t)sk_s.grn[2] * 100;
+        if (sk_f.gwet < w)
+            sk_f.gwet = w;
+    }
     {
         uint32_t n = sk_s.b->dl ? sk_s.b->dl : 1u, t = sk_c.steplen * n;
         while (t >= SK_DLN - 64u)
@@ -187,28 +192,60 @@ static uint32_t sk_grand(void)
     return x;
 }
 
+/* the pitch ratios for -12 .. +12 semitones, Q15 (32768 is unison) */
+static const uint16_t SK_SEMI[25] = {16384, 17358, 18390, 19484, 20642, 21870, 23170, 24548, 26008, 27554, 29193, 30928, 32768,
+                                     34716, 36781, 38968, 41285, 43740, 46341, 49097, 52016, 55109, 58386, 61858, 65535};
+
 static void sk_grain_spawn(void)
 {
-    uint32_t i, r = sk_grand();
+    uint32_t i, r = sk_grand(), live = 0;
     uint32_t size = (uint32_t)sk_clampi((int)sk_s.b->gr + ((int)sk_s.fx[2] - 64), 0, 127), lay = sk_s.b->gl;
+    for (i = 0; i < SK_NG; i++)
+        live += sk_f.gr[i].on;
+    if (sk_gm.on)
+        if (live >= 3u + (uint32_t)sk_s.grn[2] / 10u)                  /* DENSITY also sets how many sound at once (3 .. 15) */
+            return;
+    if (!sk_gm.on && live >= 10u)
+        return;
     for (i = 0; i < SK_NG; i++) {
         sk_grain_t *g = &sk_f.gr[i];
-        uint32_t pit, len, back, pan;
+        uint32_t pit, len, back, pan, minb;
         if (g->on)
             continue;
-        /* the pitch: unison mostly; the biome's layers now and then */
         pit = 32768u;
-        if ((r & 7u) < 3u) {
-            uint32_t pick = (r >> 4) & 3u;
-            if (pick == 0u && (lay & 1u))
-                pit = 65536u;
-            else if (pick == 1u && (lay & 2u))
-                pit = 49152u;
-            else if (pick == 2u && (lay & 4u))
-                pit = 16384u;
+        if (sk_gm.on) {
+            int st = ((int)sk_s.grn[3] - 64) * 12 / 63;                 /* PITCH: -12 .. +12, a dead zone around the middle */
+            st = st < -12 ? -12 : st > 12 ? 12 : st;
+            pit = SK_SEMI[st + 12];
+            uint32_t hib;
+            len = 700u + (uint32_t)sk_s.grn[1] * 100u + ((r >> 8) & 511u);        /* SIZE: 16 ms .. 290 ms */
+            /* the read must not run into the write head (an octave up gains on it by a grain's length) or off the old end
+             * (an octave down falls behind it): POSITION spans what is left. Frozen, nothing is written, so only the
+             * forward reach counts. */
+            minb = 512u + (pit > 32768u ? (len * (pit - 32768u) >> 15) : 0u);
+            hib = SK_GRN - 2048u - (pit < 32768u ? (len * (32768u - pit) >> 15) : 0u);
+            if (sk_gm.frz) {
+                minb = 512u + (len * pit >> 15);
+                hib = SK_GRN - 16u;
+            }
+            if (hib < minb + 64u)
+                hib = minb + 64u;
+            back = minb + ((uint32_t)sk_s.grn[0] * (hib - minb) >> 7) + ((r >> 12) & 1023u);   /* POSITION */
+            if (back > hib)
+                back = hib;
+        } else {
+            if ((r & 7u) < 3u) {                                        /* the biome's layers now and then */
+                uint32_t pick = (r >> 4) & 3u;
+                if (pick == 0u && (lay & 1u))
+                    pit = 65536u;
+                else if (pick == 1u && (lay & 2u))
+                    pit = 49152u;
+                else if (pick == 2u && (lay & 4u))
+                    pit = 16384u;
+            }
+            len = 2200u + size * 90u + ((r >> 8) & 1023u);              /* 50 .. 300 ms */
+            back = len * 2u + 2000u + ((r >> 12) & 4095u);              /* behind the write head, clear of it */
         }
-        len = 2200u + size * 90u + ((r >> 8) & 1023u);                  /* 50 .. 300 ms */
-        back = len * 2u + 2000u + ((r >> 12) & 4095u);                  /* behind the write head, clear of it */
         if (back >= SK_GRN - 4u)
             back = SK_GRN - 4u;
         g->pos = (sk_f.gwp - back) << 16;
@@ -226,15 +263,19 @@ static void sk_grain_spawn(void)
 static void sk_grains(const int32_t *in, int32_t *ol, int32_t *or_, uint32_t n)
 {
     uint32_t i, k, per = 4200u - (uint32_t)sk_s.mac[3] * 20u;          /* a new grain every ~60..95 ms */
+    if (sk_gm.on)
+        per = 3400u - (uint32_t)sk_s.grn[2] * 26u;                     /* DENSITY: a grain every 80 ms .. 3 ms */
     for (i = 0; i < n; i++) {
         int32_t sl = 0, sr = 0;
-        sk_fxm.gb[sk_f.gwp & (SK_GRN - 1u)] = (int16_t)sk_clampi(in[i], -32767, 32767);
-        sk_f.gwp++;
+        if (!(sk_gm.on && sk_gm.frz)) {                                 /* frozen: the buffer holds what it has */
+            sk_fxm.gb[sk_f.gwp & (SK_GRN - 1u)] = (int16_t)sk_clampi(in[i], -32767, 32767);
+            sk_f.gwp++;
+        }
         if (sk_f.gnext) {
             sk_f.gnext--;
         } else {
-            sk_f.gnext = per / 2u + (sk_grand() % per);
-            if (sk_s.mac[3] > 8u)
+            sk_f.gnext = per / 2u + (sk_grand() % (per ? per : 1u));
+            if (sk_s.mac[3] > 8u || sk_gm.on)
                 sk_grain_spawn();
         }
         for (k = 0; k < SK_NG; k++) {

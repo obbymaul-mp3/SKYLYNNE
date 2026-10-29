@@ -59,7 +59,7 @@ static const sk_biome_t SK_BIOMES[] = {
          {VT_DRONE, 53, 32, 1, 9, 230, 72, 30, 80, 46, 90, 70, 2},
          {VT_PAD, 57, 32, 1, 4, 230, 64, 40, 56, 52, 90, 60, 2},
          {VT_WHISTLE, 89, 24, 2, 3, 170, 56, -44, 20, 56, 110, 80, 3},
-         {VT_AIR, 69, 24, 1, 0, 230, 52, -20, 40, 50, 110, 70, 2},
+         {VT_KICK, 36, 16, 4, 0, 255, 70, 0, 5, 40, 20, 0, 1},
          {VT_SUB, 29, 48, 1, 0, 255, 96, 0, 120, 20, 30, 0, 1},
      }},
     /* 5: frost choir: whistles in a ring, a phrygian edge */
@@ -110,8 +110,8 @@ static const sk_biome_t SK_BIOMES[] = {
          {VT_CHOIR, 62, 32, 1, 0, 230, 70, -22, 70, 60, 120, 70, 2},
          {VT_CHOIR, 74, 40, 1, 9, 170, 56, 30, 56, 80, 120, 90, 3},
          {VT_ORGAN, 50, 32, 1, 4, 240, 66, 0, 96, 40, 100, 50, 1},
-         {VT_BRASS, 46, 48, 1, 20, 130, 62, 40, 40, 50, 110, 40, 2},
-         {VT_BELL, 74, 64, 1, 30, 90, 54, -40, 56, 60, 127, 90, 3},
+         {VT_HORN, 46, 48, 1, 20, 130, 62, 40, 40, 50, 110, 40, 2},
+         {VT_CELESTA, 76, 40, 3, 0, 110, 50, -40, 20, 60, 127, 90, 3},
          {VT_SUB, 26, 64, 1, 0, 255, 80, 0, 180, 20, 40, 0, 1},
      }, 1},
     /* 10: the smith's hall: a low phrygian drone, an anvil far down the hall, a choir of men */
@@ -121,7 +121,7 @@ static const sk_biome_t SK_BIOMES[] = {
          {VT_FORGE, 64, 96, 1, 10, 120, 51, -30, 16, 70, 127, 60, 2},
          {VT_CHOIR, 52, 32, 1, 6, 220, 55, 20, 66, 30, 110, 70, 2},
          {VT_BRASS, 40, 48, 1, 16, 140, 53, 36, 44, 44, 110, 40, 2},
-         {VT_STOMP, 30, 128, 1, 40, 150, 51, 0, 18, 40, 110, 0, 1},
+         {VT_TAIKO, 36, 128, 1, 40, 150, 51, 0, 18, 40, 110, 0, 1},
          {VT_SUB, 28, 64, 1, 0, 255, 63, 0, 190, 16, 40, 0, 1},
      }, 1},
     /* 11: a stone colossus: heavy and slow, a footfall every minute, horns and a deep bell */
@@ -162,7 +162,7 @@ static const sk_biome_t SK_BIOMES[] = {
          {VT_GLASS, 74, 24, 1, 0, 230, 62, -20, 40, 76, 110, 90, 3},
          {VT_GLASS, 62, 32, 1, 9, 200, 56, 26, 52, 66, 110, 80, 2},
          {VT_DRIP, 86, 20, 3, 4, 150, 60, -44, 8, 80, 127, 70, 3},
-         {VT_BELL, 79, 96, 1, 24, 110, 50, 44, 40, 80, 127, 90, 2},
+         {VT_KALIMBA, 79, 24, 3, 6, 130, 50, 44, 20, 80, 127, 70, 3},
          {VT_WHISTLE, 93, 40, 1, 12, 150, 48, 12, 28, 60, 120, 90, 2},
          {VT_PAD, 55, 32, 1, 5, 220, 56, 0, 70, 50, 110, 60, 2},
      }, 2},
@@ -204,7 +204,7 @@ static const sk_biome_t SK_BIOMES[] = {
          {VT_ORGAN, 48, 32, 1, 0, 240, 52, 0, 100, 50, 100, 50, 1},
          {VT_CHOIR, 65, 32, 1, 7, 210, 54, -30, 66, 70, 120, 80, 2},
          {VT_STRING, 60, 40, 1, 12, 190, 52, 34, 60, 60, 110, 70, 2},
-         {VT_BELL, 77, 64, 1, 30, 100, 46, -40, 56, 70, 127, 90, 3},
+         {VT_CELESTA, 77, 40, 3, 0, 110, 46, -40, 20, 70, 127, 90, 3},
          {VT_BRASS, 53, 48, 1, 20, 120, 50, 40, 44, 50, 110, 40, 2},
          {VT_SUB, 24, 64, 1, 0, 255, 64, 0, 180, 16, 40, 0, 1},
      }, 3},
@@ -247,7 +247,7 @@ static const sk_biome_t SK_BIOMES[] = {
          {VT_ASCENT, 31, 64, 1, 20, 255, 54, 30, 200, 80, 120, 70, 1},
          {VT_STRING, 52, 32, 1, 6, 210, 50, 0, 70, 60, 110, 60, 2},
          {VT_CHOIR, 64, 40, 1, 11, 160, 46, -40, 56, 70, 120, 90, 2},
-         {VT_BELL, 76, 96, 1, 30, 100, 44, 40, 60, 60, 127, 90, 3},
+         {VT_KALIMBA, 76, 28, 3, 0, 110, 46, 40, 20, 60, 127, 90, 3},
          {VT_SUB, 28, 64, 1, 0, 255, 62, 0, 180, 16, 40, 0, 1},
      }, 4},
     /* 22 */
@@ -287,7 +287,7 @@ static const sk_biome_t SK_BIOMES[] = {
      {
          {VT_CHOIR, 69, 32, 1, 0, 220, 50, -26, 60, 90, 120, 90, 2},
          {VT_CHOIR, 76, 40, 1, 9, 170, 44, 30, 52, 90, 120, 100, 3},
-         {VT_HARP, 81, 32, 2, 5, 130, 50, -40, 16, 70, 127, 80, 3},
+         {VT_CELESTA, 81, 32, 2, 5, 130, 46, -40, 20, 70, 127, 80, 3},
          {VT_STRING, 57, 40, 1, 12, 200, 50, 10, 70, 50, 110, 60, 2},
          {VT_WHISTLE, 88, 40, 1, 3, 140, 42, 42, 28, 60, 120, 90, 2},
          {VT_SUB, 33, 64, 1, 0, 255, 60, 0, 180, 16, 40, 10, 1},
@@ -317,7 +317,7 @@ static const sk_biome_t SK_BIOMES[] = {
     /* 28 */
     {"Gaslit Rooftops", 11, 7, SK_MINOR, 42, 28, 2, 50, 5, {42, 50, 35, 90},
      {
-         {VT_MBOX, 71, 28, 3, 0, 110, 48, -30, 12, 60, 120, 60, 3},
+         {VT_HARPSI, 71, 28, 3, 0, 110, 48, -30, 24, 60, 120, 60, 3},
          {VT_STRING, 47, 40, 1, 9, 200, 50, 24, 70, 30, 110, 60, 2},
          {VT_ORGAN, 47, 32, 1, 4, 220, 46, 0, 90, 30, 100, 40, 1},
          {VT_WHISTLE, 85, 40, 1, 13, 130, 42, 40, 26, 50, 120, 80, 3},
@@ -359,8 +359,8 @@ static const sk_biome_t SK_BIOMES[] = {
     /* 32 */
     {"White City", 2, 7, SK_MAJOR, 50, 29, 3, 60, 5, {40, 40, 60, 95},
      {
-         {VT_BRASS, 50, 48, 1, 0, 140, 52, -28, 44, 60, 110, 40, 2},
-         {VT_CHOIR, 66, 32, 1, 8, 200, 50, 26, 62, 70, 120, 80, 2},
+         {VT_HORN, 50, 48, 1, 0, 140, 52, -28, 44, 60, 110, 40, 2},
+         {VT_ANTHEM, 66, 32, 1, 8, 200, 50, 26, 62, 70, 120, 80, 2},
          {VT_STRING, 62, 40, 1, 13, 200, 50, -10, 64, 60, 110, 70, 2},
          {VT_ORGAN, 50, 32, 1, 5, 220, 46, 0, 90, 40, 100, 40, 1},
          {VT_BELL, 74, 64, 1, 30, 100, 44, 40, 56, 60, 127, 90, 3},
@@ -369,8 +369,8 @@ static const sk_biome_t SK_BIOMES[] = {
     /* 33 */
     {"Seven Gates", 7, 7, SK_DORIAN, 42, 28, 2, 50, 5, {40, 46, 40, 90},
      {
-         {VT_STOMP, 28, 128, 1, 0, 150, 52, 0, 18, 40, 110, 0, 1},
-         {VT_BRASS, 43, 48, 1, 9, 150, 52, -30, 44, 40, 110, 40, 2},
+         {VT_TAIKO, 36, 128, 1, 0, 150, 52, 0, 18, 40, 110, 0, 1},
+         {VT_HORN, 43, 48, 1, 9, 150, 52, -30, 44, 40, 110, 40, 2},
          {VT_CHOIR, 52, 32, 1, 14, 200, 48, 28, 66, 30, 110, 70, 2},
          {VT_DRONE, 31, 40, 1, 0, 255, 58, -12, 120, 30, 80, 50, 1},
          {VT_BELL, 55, 96, 1, 26, 100, 44, 40, 64, 50, 127, 80, 2},
@@ -400,16 +400,16 @@ static const sk_biome_t SK_BIOMES[] = {
 #define SK_NBIOME ((uint32_t)(sizeof SK_BIOMES / sizeof SK_BIOMES[0]))
 
 /* the sounds each world offers: ALGORITHM walks this list for the selected voice */
-static const uint8_t SK_WN[8] = {5, 10, 10, 12, 12, 12, 12, 12};
-static const uint8_t SK_WL[8][12] = {
-    {VT_DRONE, VT_WHISTLE, VT_SUB, VT_PAD, VT_AIR},
-    {VT_CHOIR, VT_BRASS, VT_ORGAN, VT_BELL, VT_FORGE, VT_STOMP, VT_DRONE, VT_PAD, VT_SUB, VT_WHISTLE},
-    {VT_WHALE, VT_DRIP, VT_GLASS, VT_BELL, VT_PAD, VT_AIR, VT_SUB, VT_DRONE, VT_WHISTLE, VT_CHOIR},
-    {VT_STRING, VT_CHOIR, VT_HARP, VT_GLASS, VT_MBOX, VT_ORGAN, VT_BELL, VT_PAD, VT_WHISTLE, VT_DRONE, VT_SUB, VT_AIR},
-    {VT_BRASS, VT_CHOIR, VT_FORGE, VT_STOMP, VT_ASCENT, VT_STRING, VT_ORGAN, VT_BELL, VT_DRONE, VT_SUB, VT_PAD, VT_WHISTLE},
-    {VT_HARP, VT_CHOIR, VT_STRING, VT_WHISTLE, VT_GLASS, VT_BELL, VT_DRIP, VT_PAD, VT_AIR, VT_MBOX, VT_DRONE, VT_SUB},
-    {VT_MBOX, VT_STRING, VT_ORGAN, VT_BELL, VT_CHOIR, VT_BRASS, VT_FORGE, VT_STOMP, VT_WHISTLE, VT_DRONE, VT_SUB, VT_AIR},
-    {VT_BRASS, VT_CHOIR, VT_STRING, VT_ORGAN, VT_BELL, VT_HARP, VT_STOMP, VT_WHISTLE, VT_PAD, VT_DRONE, VT_SUB, VT_AIR},
+static const uint8_t SK_WN[8] = {8, 15, 12, 15, 16, 15, 15, 15};
+static const uint8_t SK_WL[8][16] = {
+    {VT_DRONE, VT_WHISTLE, VT_SUB, VT_PAD, VT_AIR, VT_EPIANO, VT_KALIMBA, VT_KICK},
+    {VT_CHOIR, VT_BRASS, VT_ORGAN, VT_BELL, VT_FORGE, VT_STOMP, VT_DRONE, VT_PAD, VT_SUB, VT_WHISTLE, VT_HARPSI, VT_CELESTA, VT_HORN, VT_ANTHEM, VT_TAIKO},
+    {VT_WHALE, VT_DRIP, VT_GLASS, VT_BELL, VT_PAD, VT_AIR, VT_SUB, VT_DRONE, VT_WHISTLE, VT_CHOIR, VT_KALIMBA, VT_CELESTA},
+    {VT_STRING, VT_CHOIR, VT_HARP, VT_GLASS, VT_MBOX, VT_ORGAN, VT_BELL, VT_PAD, VT_WHISTLE, VT_DRONE, VT_SUB, VT_AIR, VT_EPIANO, VT_HARPSI, VT_CELESTA},
+    {VT_BRASS, VT_CHOIR, VT_FORGE, VT_STOMP, VT_ASCENT, VT_STRING, VT_ORGAN, VT_BELL, VT_DRONE, VT_SUB, VT_PAD, VT_WHISTLE, VT_KALIMBA, VT_TAIKO, VT_HORN, VT_KICK},
+    {VT_HARP, VT_CHOIR, VT_STRING, VT_WHISTLE, VT_GLASS, VT_BELL, VT_DRIP, VT_PAD, VT_AIR, VT_MBOX, VT_DRONE, VT_SUB, VT_CELESTA, VT_KALIMBA, VT_HARPSI},
+    {VT_MBOX, VT_STRING, VT_ORGAN, VT_BELL, VT_CHOIR, VT_BRASS, VT_FORGE, VT_STOMP, VT_WHISTLE, VT_DRONE, VT_SUB, VT_AIR, VT_HARPSI, VT_EPIANO, VT_CELESTA},
+    {VT_BRASS, VT_CHOIR, VT_STRING, VT_ORGAN, VT_BELL, VT_HARP, VT_STOMP, VT_WHISTLE, VT_PAD, VT_DRONE, VT_SUB, VT_AIR, VT_HORN, VT_TAIKO, VT_ANTHEM},
 };
 /* the next (d = 1) or previous sound in the world's list; a sound it does not list steps to its first */
 static uint8_t sk_next_type(uint32_t world, uint8_t cur, int d)

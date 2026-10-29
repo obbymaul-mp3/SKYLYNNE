@@ -29,11 +29,13 @@
 #define SK_ENDLESS 0x7FFFFFFFu           /* a gate that does not close */
 
 enum { VT_DRONE, VT_WHISTLE, VT_SUB, VT_PAD, VT_AIR, VT_CHOIR, VT_BRASS, VT_ORGAN, VT_BELL, VT_FORGE, VT_STOMP, VT_DRIP,
-       VT_WHALE, VT_GLASS, VT_STRING, VT_HARP, VT_MBOX, VT_ASCENT, VT_N };
+       VT_WHALE, VT_GLASS, VT_STRING, VT_HARP, VT_MBOX, VT_ASCENT, VT_KALIMBA, VT_CELESTA, VT_EPIANO, VT_HARPSI,
+       VT_TAIKO, VT_HORN, VT_KICK, VT_ANTHEM, VT_N };
 static const char *const SK_TYPE_NAME[VT_N] = {"Drone", "Whistle", "Sub", "Pad", "Air", "Choir", "Brass", "Organ", "Bell",
-                                               "Forge", "Stomp", "Drip", "Whale", "Glass", "Strings", "Harp", "Mbox", "Ascent"};
+                                               "Forge", "Stomp", "Drip", "Whale", "Glass", "Strings", "Harp", "Mbox", "Ascent", "Kalimba", "Celesta", "E.Piano", "Harpsi", "Taiko", "Horn", "Kick", "Anthem"};
 /* the struck kinds: a short attack, then the whole length is the ring-out */
-#define SK_PERC(t) ((t) == VT_BELL || (t) == VT_FORGE || (t) == VT_STOMP || (t) == VT_DRIP || (t) == VT_HARP || (t) == VT_MBOX)
+#define SK_PERC(t) ((t) == VT_BELL || (t) == VT_FORGE || (t) == VT_STOMP || (t) == VT_DRIP || (t) == VT_HARP || (t) == VT_MBOX || \
+                    (t) == VT_KALIMBA || (t) == VT_CELESTA || (t) == VT_EPIANO || (t) == VT_HARPSI || (t) == VT_TAIKO || (t) == VT_KICK)
 /* SUSTAIN -6..+6: the note's length times 2^(s/3) / 4 (Q8); the top step is endless */
 static const uint16_t SK_SUSM[13] = {64, 81, 102, 128, 161, 203, 256, 323, 406, 512, 645, 813, 1024};
 
@@ -128,6 +130,7 @@ static struct {
     uint8_t crv[SK_NV];
     uint8_t arp[4];                      /* ARP page: PATTERN (0 off), RATE, RANGE (octaves), GATE */
     uint8_t glo[4];                      /* GLO page: LOOP (4 .. 32 bars in fours), POWER, BOLTS, AURA */
+    uint8_t grn[4];                      /* GRAIN page: POSITION, SIZE, DENSITY, PITCH (64: unison), 0..127 */
 } sk_s;
 
 static struct {
@@ -139,6 +142,8 @@ static struct { uint8_t on; uint32_t n; } sk_gl;
 static volatile struct { uint8_t on, level, cnt, bar, bars; } sk_gv;
 /* the arpeggiator: it takes over the selected voice's notes */
 static struct { uint32_t clk, k; uint8_t voice; } sk_ar;
+/* the live grain cloud (REC): on, and frozen while REC is held */
+static volatile struct { uint8_t on, frz; } sk_gm;
 static const char *const SK_ARP_NAME[7] = {"OFF", "UP", "DOWN", "UP-DN", "RANDOM", "STRUM", "EVEN"};
 static const char *const SK_ARP_RATE[5] = {"1/4", "1/8", "1/16", "1/16T", "1/32"};
 
@@ -261,13 +266,16 @@ static void sk_start(sk_voice_t *v, uint32_t type, uint32_t note, uint32_t len, 
         v->linc[0] = 4000u + (sk_rand() & 4095u);
         v->linc[1] = 9000u;
         break;
-    case VT_CHOIR: {
+    case VT_CHOIR:
+    case VT_ANTHEM: {
         static const uint16_t VOW[5][3] = {{800, 1150, 2900}, {450, 800, 2830}, {400, 1700, 2600}, {325, 700, 2700},
                                            {270, 2100, 3000}};          /* ah oh eh oo ee */
         static const uint32_t DET[3] = {65290, 65536, 65780};
-        uint32_t vw = sk_rand() % 5u, f = 4781u;
+        static const uint32_t DETA[3] = {32700, 65536, 131300};          /* the anthem: an octave below, the note, an octave above */
+        const uint32_t *dt = type == VT_ANTHEM ? DETA : DET;
+        uint32_t vw = type == VT_ANTHEM ? 0u : sk_rand() % 5u, f = 4781u;
         for (k = 0; k < 3u; k++)
-            v->tinc[k] = (uint32_t)(((uint64_t)SK_INC[nn] * DET[k]) >> 16);
+            v->tinc[k] = (uint32_t)(((uint64_t)SK_INC[nn > 90u ? 90u : nn] * dt[k]) >> 16);
         for (k = 0; k < 3u; k++)
             v->tf[k] = (int32_t)((VOW[vw][k] * f) >> 10);
         if (fresh) {
@@ -283,14 +291,15 @@ static void sk_start(sk_voice_t *v, uint32_t type, uint32_t note, uint32_t len, 
         break;
     }
     case VT_BRASS:
+    case VT_HORN:
     case VT_STRING: {
         static const uint32_t DET[3] = {65480, 65536, 65600}, DETS[3] = {65180, 65536, 65890};
-        const uint32_t *dt = type == VT_BRASS ? DET : DETS;
+        const uint32_t *dt = type == VT_STRING ? DETS : DET;
         for (k = 0; k < 3u; k++)
             v->tinc[k] = (uint32_t)(((uint64_t)SK_INC[nn] * dt[k]) >> 16);
-        v->lpk = type == VT_BRASS ? 800 + (int32_t)hard * 65 : 1200 + (int32_t)hard * 70;
-        v->peak = type == VT_BRASS ? 2700 + (int32_t)vel * 40 : 2300 + (int32_t)vel * 34;
-        v->linc[0] = (type == VT_BRASS ? 280000u : 350000u) + (sk_rand() & 32767u);
+        v->lpk = type == VT_BRASS ? 800 + (int32_t)hard * 65 : type == VT_HORN ? 950 + (int32_t)hard * 38 : 1200 + (int32_t)hard * 70;
+        v->peak = type == VT_BRASS ? 2700 + (int32_t)vel * 40 : type == VT_HORN ? 2900 + (int32_t)vel * 42 : 2300 + (int32_t)vel * 34;
+        v->linc[0] = (type == VT_STRING ? 350000u : 260000u) + (sk_rand() & 32767u);
         v->linc[1] = 6000u + (sk_rand() & 8191u);
         break;
     }
@@ -342,9 +351,52 @@ static void sk_start(sk_voice_t *v, uint32_t type, uint32_t note, uint32_t len, 
         v->tinc[0] = SK_INC[nn];
         v->tinc[1] = SK_INC[nn] >> 1;
         v->pd = 98304;                                                   /* the pitch starts 1.5x up and falls */
+        v->idx = 11;                                                     /* how fast it falls (a shift) */
+        v->br = 128;                                                     /* the thud of noise, x1 */
         v->peak = 3200 + (int32_t)vel * 38;
         v->lpk = 500 + (int32_t)hard * 14;                               /* the thud's low-pass */
         break;
+    case VT_TAIKO: {                                                     /* a big drum: the skin's slap, then the body */
+        uint32_t nb = nn > 50u ? 50u : nn;
+        v->tinc[0] = SK_INC[nb];
+        v->tinc[1] = SK_INC[nb] >> 1;
+        v->pd = 49152;
+        v->idx = 10;
+        v->br = 190;
+        v->peak = 2800 + (int32_t)vel * 32;
+        v->lpk = 1500 + (int32_t)hard * 28;
+        break;
+    }
+    case VT_KICK: {                                                      /* a techno kick: a sine that falls fast from high */
+        uint32_t nb = nn > 43u ? 43u : nn;
+        v->tinc[0] = SK_INC[nb];
+        v->tinc[1] = SK_INC[nb] >> 1;
+        v->pd = 196608;
+        v->idx = 9;
+        v->br = 28;
+        v->peak = 3900 + (int32_t)vel * 42;
+        v->lpk = 4000 + (int32_t)hard * 30;
+        break;
+    }
+    case VT_KALIMBA:
+    case VT_CELESTA:
+    case VT_EPIANO:
+    case VT_HARPSI: {                                                    /* plucks and keys: five partials, the upper ones dying fast */
+        static const uint32_t RK[5] = {65600, 65536, 353894, 786432, 131072};     /* a thumb piano's tine: its stiff 5.4th and 12th */
+        static const uint32_t RC[5] = {65600, 65536, 262144, 655360, 131072};     /* a celesta's bar: 4th and 10th */
+        static const uint32_t RE[5] = {65600, 65536, 131072, 458752, 196608};     /* a tine piano: 2nd, 3rd and the bark of the 7th */
+        static const uint32_t RS[5] = {65700, 65536, 131072, 196608, 262144};     /* a harpsichord's string: 1 2 3 4 */
+        const uint32_t *rt = type == VT_KALIMBA ? RK : type == VT_CELESTA ? RC : type == VT_EPIANO ? RE : RS;
+        uint32_t nb = nn > 88u ? 88u : nn;
+        for (k = 0; k < 5u; k++)
+            v->tinc[k] = (uint32_t)(((uint64_t)SK_INC[nb] * rt[k]) >> 16);
+        v->br = type == VT_KALIMBA ? 46 + (int32_t)hard : type == VT_HARPSI ? 70 + (int32_t)hard * 2 : type == VT_EPIANO ? 30 + (int32_t)hard : 14;
+        v->idx = 0;
+        v->peak = 3000 + (int32_t)vel * 40;
+        v->lpk = type == VT_KALIMBA ? 700 + (int32_t)hard * 20 : type == VT_CELESTA ? 1300 + (int32_t)hard * 40 :
+                 type == VT_EPIANO ? 1800 + (int32_t)hard * 50 : 3000 + (int32_t)hard * 60;
+        break;
+    }
     case VT_DRIP:
         v->tinc[0] = SK_INC[nn > 96u ? 96u : nn];
         v->pd = 65536;
@@ -392,7 +444,7 @@ static void sk_start(sk_voice_t *v, uint32_t type, uint32_t note, uint32_t len, 
             v->inc[k] = v->tinc[k];
     if (type == VT_WHALE)                                                 /* every call starts a fourth below and rises */
         v->inc[0] = (uint32_t)(((uint64_t)v->tinc[0] * 52000u) >> 16);
-    if (type == VT_STOMP || type == VT_DRIP)
+    if (type == VT_STOMP || type == VT_DRIP || type == VT_TAIKO || type == VT_KICK)
         v->lph[0] = 0;
     v->act = 1;
 }
@@ -594,7 +646,7 @@ static void sk_arp_tick(uint32_t n)
  * voices in their own registers. Every voice has a part by its kind: LOW holds the root, PAD the chord, LEAD sings a rising
  * line, SPARKLE rolls the chord upward, HIT strikes on the beat. The loop builds in four stages: the pads and the roots,
  * then the voices, then the lead and the sparkle, then everything with the hits. */
-static const uint8_t SK_CLASS[VT_N] = {0, 2, 0, 1, 1, 1, 2, 1, 3, 4, 4, 3, 2, 1, 1, 3, 3, 1};
+static const uint8_t SK_CLASS[VT_N] = {0, 2, 0, 1, 1, 1, 2, 1, 3, 4, 4, 3, 2, 1, 1, 3, 3, 1, 3, 3, 3, 3, 4, 2, 4, 1};
 /* 0 LOW  1 PAD  2 LEAD  3 SPARKLE  4 HIT, by voice kind (VT_*) */
 
 static void sk_glow_note(uint32_t i, int deg, uint32_t len, uint32_t vel, uint32_t extra_hard, uint32_t ring)
@@ -720,6 +772,10 @@ static void sk_load(const sk_biome_t *b)
             sk_s.glo[1] = 90;
             sk_s.glo[2] = 70;
             sk_s.glo[3] = 0;
+            sk_s.grn[0] = 50;
+            sk_s.grn[1] = 56;
+            sk_s.grn[2] = 64;
+            sk_s.grn[3] = 64;
         }
     }
     sk_s.arp[0] = 0;
@@ -1136,8 +1192,8 @@ static void sk_run_bell(sk_voice_t *v, int32_t *o, uint32_t n)
 /* STOMP: a body that drops from a fifth above to its pitch, a sub-octave boom and a low thud of noise */
 static void sk_run_stomp(sk_voice_t *v, int32_t *o, uint32_t n)
 {
-    int32_t g, dg, pk = v->peak, pd = v->pd, lp = v->lp, nz = v->nz, lpk = v->lpk;
-    uint32_t i;
+    int32_t g, dg, pk = v->peak, pd = v->pd, lp = v->lp, nz = v->nz, lpk = v->lpk, tb = v->br;
+    uint32_t i, sh = (uint32_t)v->idx;
     sk_swell(v, n, &g, &dg);
     for (i = 0; i < n; i++) {
         int32_t ga, gb, s, th;
@@ -1145,9 +1201,9 @@ static void sk_run_stomp(sk_voice_t *v, int32_t *o, uint32_t n)
         g += dg;
         ga = g >> 8;
         gb = (ga * ga) >> 15;
-        pd -= pd >> 11;
+        pd -= pd >> sh;
         lp += (int32_t)(((int64_t)(sk_noise(&nz) - lp) * lpk) >> 15);
-        th = (lp * gb) >> 14;
+        th = (((lp * gb) >> 14) * tb) >> 7;
         s = ((SK_SIN[v->ph[0] >> 22] * gb) >> 15) + ((SK_SIN[v->ph[1] >> 22] * ga) >> 16) + th;
         v->ph[0] += i0;
         v->ph[1] += v->tinc[1];
@@ -1282,16 +1338,24 @@ static void sk_voices(int32_t *l, int32_t *r, int32_t *rv, int32_t *gr, uint32_t
         case VT_SUB: sk_run_sub(v, o, n); break;
         case VT_PAD: sk_run_pad(v, o, n); break;
         case VT_AIR: sk_run_air(v, o, n); break;
-        case VT_CHOIR: sk_run_choir(v, o, n); break;
+        case VT_CHOIR:
+        case VT_ANTHEM: sk_run_choir(v, o, n); break;
         case VT_BRASS:
+        case VT_HORN:
         case VT_STRING: sk_run_brass(v, o, n); break;
         case VT_ORGAN: sk_run_organ(v, o, n); break;
         case VT_BELL:
         case VT_FORGE:
         case VT_HARP:
-        case VT_MBOX: sk_run_bell(v, o, n); break;
+        case VT_MBOX:
+        case VT_KALIMBA:
+        case VT_CELESTA:
+        case VT_EPIANO:
+        case VT_HARPSI: sk_run_bell(v, o, n); break;
         case VT_ASCENT: sk_run_ascent(v, o, n); break;
-        case VT_STOMP: sk_run_stomp(v, o, n); break;
+        case VT_STOMP:
+        case VT_TAIKO:
+        case VT_KICK: sk_run_stomp(v, o, n); break;
         case VT_DRIP: sk_run_drip(v, o, n); break;
         case VT_WHALE: sk_run_whale(v, o, n); break;
         case VT_GLASS: sk_run_glass(v, o, n); break;
@@ -1302,6 +1366,8 @@ static void sk_voices(int32_t *l, int32_t *r, int32_t *rv, int32_t *gr, uint32_t
         gr_ = (v->gr * (g >> 3)) >> 12;
         srv = (int32_t)(c->rsend * (32u + sp) >> 4);                 /* the sends follow SPACE: 0..~10 of 128 */
         sgr = (int32_t)(c->gsend * sp >> 6);
+        if (sk_gm.on && sgr < 56)
+            sgr = 56;                                                /* with the grains on, every voice feeds them */
         for (i = 0; i < n; i++) {
             int32_t a = (o[i] * (gl)) >> 15, b = (o[i] * (gr_)) >> 15;
             l[i] += a;

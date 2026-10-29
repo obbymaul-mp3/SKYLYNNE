@@ -83,6 +83,13 @@ int main(int argc, char **argv)
         sk_s.glo[1] = (uint8_t)g[1];
         sk_glow_set(1);
     }
+    if (getenv("SK_GRAIN")) {                     /* SK_GRAIN=pos,size,dens,pitch  SK_FRZ=second to freeze at */
+        int g[4] = {50, 56, 64, 64};
+        sscanf(getenv("SK_GRAIN"), "%d,%d,%d,%d", &g[0], &g[1], &g[2], &g[3]);
+        for (int q = 0; q < 4; q++)
+            sk_s.grn[q] = (uint8_t)g[q];
+        sk_gm.on = 1;
+    }
     if (getenv("SK_MUTE"))
         sk_s.mute = (uint8_t)atoi(getenv("SK_MUTE"));
     sk_f.master = 3000;
@@ -90,6 +97,8 @@ int main(int argc, char **argv)
     for (i = 0; i < total; i += SK_CTL) {
         uint8_t c0[SK_NV];
         memcpy(c0, (const void *)sk_ui.cnt, SK_NV);
+        if (getenv("SK_FRZ") && i == (uint32_t)(atof(getenv("SK_FRZ")) * 44100.0) / SK_CTL * SK_CTL)
+            sk_gm.frz = 1;
         sk_render(buf, SK_CTL);
         for (k = 0; k < SK_NV; k++)
             strikes[k] += (uint8_t)(sk_ui.cnt[k] - c0[k]);

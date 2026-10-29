@@ -139,6 +139,12 @@ int main(int argc, char **argv)
                 if (!strcmp(s + 4, BN[k]))
                     hs_pr |= 1u << k;
             run(66);
+        } else if (!strncmp(s, "press:", 6)) {                       /* a press that stays down (hold: again lets go) */
+            int k;
+            for (k = 0; k < SB_N; k++)
+                if (!strcmp(s + 6, BN[k]))
+                    hs_pr |= 1u << k, hs_held |= 1u << k;
+            run(66);
         } else if (!strncmp(s, "hold:", 5)) {
             int k;
             for (k = 0; k < SB_N; k++)

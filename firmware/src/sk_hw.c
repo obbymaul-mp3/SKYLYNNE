@@ -18,9 +18,7 @@ extern uint32_t _pool_start[], _pool_end[], _rt_start[], _rt_end[], _rt_load[];
 
 static int32_t abuf[2u * HALF_WORDS] __attribute__((aligned(4)));
 static volatile uint32_t fm1_ms;
-static volatile uint32_t sk_cpu_pct;      /* the audio interrupt's load, % of a half's time (smoothed) */
-static volatile uint32_t sk_cpu_max;
-static volatile uint32_t sk_late;         /* halves that overran */
+/* sk_cpu_pct (the audio interrupt's load, % of a half's time, smoothed), sk_cpu_max and sk_late (halves that overran): declared in sk_ui.c */
 static struct bootguard bootguard __attribute__((section(".noinit")));
 static uint8_t sk_safe;
 static uint32_t sk_stage __attribute__((section(".noinit")));      /* the boot's breadcrumb: survives a crash */
