@@ -1,13 +1,23 @@
 # SKYLYNNE
 
 Ambient firmware for the M-VAVE FM-1. Six voices play themselves on one tempo and scale. Four macro knobs
-(DENSITY, MOTION, COLOUR, SPACE) shape them, and each voice can be edited: type, level, pan, decay, material.
-Icy bells, glassy plucks, detuned pads, deep sub and a very large reverb.
+(DENSITY, MOTION, COLOUR, SPACE) shape them, and each voice can be edited: type, level, pan, sustain, tone.
+Long drones, thin whistles, a deep sub and a very large reverb.
+
+The presets are grouped in worlds, and each world has its own sounds and its own picture:
+
+| World | Presets | Sounds (ALGORITHM walks this list) |
+| --- | --- | --- |
+| City at night | 1–8 | drone, whistle, sub, pad, air |
+| The cathedral | 9–12 | choir, brass, organ, bell, forge, stomp, drone, pad, sub, whistle |
+| The deep | 13–16 | whale, drip, glass, bell, pad, air, sub, drone, whistle, choir |
+
+The struck sounds (bell, forge, stomp, drip) are very sparse by design.
 
 A second page is a physics sequencer: a polygon spins, balls fall inside it, and every wall hit plays a note on
 one of the voices.
 
-The screen is a figure on a cliff at dusk, looking over water. The scene follows the biome you pick.
+The screen is a figure on the left looking over water, from a cliff, a terrace of old stone or a fallen column. The scene follows the preset you pick.
 
 Try it in the browser before installing anything: build with `tools/build_web.sh` and open `build/web/play/`
 (or use the published page).

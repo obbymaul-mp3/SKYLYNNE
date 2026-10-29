@@ -283,7 +283,9 @@ static void ui_input(uint32_t now)
     }
     d = ui_enc(SE_ALGO);
     if (d) {
-        sk_s.type[sk_s.sel] = (uint8_t)((sk_s.type[sk_s.sel] + VT_N * 8u + (uint32_t)d) % VT_N);
+        int st = d < 0 ? -1 : 1;
+        for (int k = d < 0 ? -d : d; k > 0; k--)
+            sk_s.type[sk_s.sel] = sk_next_type(sk_s.b->world, sk_s.type[sk_s.sel], st);
         ui.hud_t = now;
         ui_touch(sk_s.sel);
     }
