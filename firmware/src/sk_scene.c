@@ -23,9 +23,9 @@ static const uint8_t SC_COL[SK_NV] = {C_PINK, C_CYAN, C_YELLOW, C_EMBER, C_GREEN
 static const int16_t SC_AIM[SK_NV][2] = {{70, 30}, {150, 38}, {196, 50}, {170, 100}, {60, 90}, {150, 150}};
 static const uint8_t SC_THEME[8] = {1, 0, 0, 2, 0, 2, 2, 1};      /* a city biome's sky: 0 slate night, 1 dusk haze, 2 mist */
 /* a biome's palette (sk_fb.c); 0..7 as SC_THEME; a world's own palette, tinted per preset (SC_TINT) in the later worlds */
-static const uint8_t SC_PAL[36] = {0, 0, 0, 0, 0, 0, 0, 0, 3, 5, 6, 7, 4, 8, 9, 10, 11, 11, 11, 11, 12, 12, 12, 12, 13, 13, 13, 13,
+static const uint8_t SC_PAL[32] = {0, 0, 0, 0, 3, 5, 6, 7, 4, 8, 9, 10, 11, 11, 11, 11, 12, 12, 12, 12, 13, 13, 13, 13,
                                    14, 14, 14, 14, 15, 15, 15, 15};
-static const uint8_t SC_VAR[36] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3,
+static const uint8_t SC_VAR[32] = {0, 0, 0, 0, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3,
                                    0, 1, 2, 3, 0, 1, 2, 3};                           /* its look within its world */
 static const uint8_t SC_TINT[20][5] = {
     {0, 0, 0, 0, 128}, {255, 220, 160, 44, 128}, {150, 60, 120, 90, 100}, {60, 70, 90, 130, 85},          /* Columbia */
@@ -103,12 +103,12 @@ static void sc_theme(uint32_t biome)
 {
     uint32_t i;
     sc_world = SK_BIOMES[biome % SK_NBIOME].world;
-    sc_var = SC_VAR[biome % 36u];
+    sc_var = SC_VAR[biome % 32u];
     for (i = 0; i < 5; i++)
-        fb_tint[i] = biome >= 16u ? SC_TINT[(biome - 16u) % 20u][i] : (i == 4 ? 128 : 0);
+        fb_tint[i] = biome >= 12u ? SC_TINT[(biome - 12u) % 20u][i] : (i == 4 ? 128 : 0);
     for (i = 0; i < 5; i++)
         sc_tint0[i] = fb_tint[i];
-    sc_pal_id = (uint8_t)(sc_world ? SC_PAL[biome % 36u] : SC_THEME[biome & 7u]);
+    sc_pal_id = (uint8_t)(sc_world ? SC_PAL[biome % 32u] : SC_THEME[biome & 7u]);
     if (sk_gv.on)
         for (i = 0; i < 5; i++)
             fb_tint[i] = SK_STORM[i];

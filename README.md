@@ -2,20 +2,20 @@
 
 Ambient firmware for the M-VAVE FM-1. Six voices play themselves on one tempo and scale. Four macro knobs
 (DENSITY, MOTION, COLOUR, SPACE) shape them, and each voice can be edited: type, level, pan, sustain, tone.
-Long drones, thin whistles, a deep sub and a very large reverb.
+Long drones, thin whistles, a deep sub and a very large reverb. The first world, Synth City, is the night skyline with a trance-synth sound: wide detuned saw pads whose filters open and close, a gated pad, plucks, a saw bass and a soft kick.
 
 The presets are grouped in worlds, and each world has its own sounds and its own picture:
 
 | World | Presets | Sounds (ALGORITHM walks this list) |
 | --- | --- | --- |
-| City at night | 1–8 | drone, whistle, sub, pad, air |
-| The cathedral (Anor Londo) | 9–12 | choir, brass, organ, bell, forge, stomp, drone, pad, sub, whistle |
-| The deep (Atlantis) | 13–16 | whale, drip, glass, bell, pad, air, sub, drone, whistle, choir |
-| Columbia | 17–20 | strings, choir, harp, glass, music box, organ, bell, pad, whistle, drone, sub, air |
-| Babel | 21–24 | brass, choir, forge, stomp, ascent (a tone that rises for ever), strings, organ, bell, drone, sub, pad, whistle |
-| Lothlórien | 25–28 | harp, choir, strings, whistle, glass, bell, drip, pad, air, music box, drone, sub |
-| Yharnam | 29–32 | music box, strings, organ, bell, choir, brass, forge, stomp, whistle, drone, sub, air |
-| Minas Tirith | 33–36 | brass, choir, strings, organ, bell, harp, stomp, whistle, pad, drone, sub, air |
+| Synth City (the city at night) | 1–4 | supersaw, gate pad, syn pluck, syn bass, kick, e-piano, kalimba, choir, pad, air, sub, drone, whistle, celesta, anthem |
+| The cathedral (Anor Londo) | 5–8 | choir, brass, organ, bell, forge, stomp, drone, pad, sub, whistle |
+| The deep (Atlantis) | 9–12 | whale, drip, glass, bell, pad, air, sub, drone, whistle, choir |
+| Columbia | 13–16 | strings, choir, harp, glass, music box, organ, bell, pad, whistle, drone, sub, air |
+| Babel | 17–20 | brass, choir, forge, stomp, ascent (a tone that rises for ever), strings, organ, bell, drone, sub, pad, whistle |
+| Lothlórien | 21–24 | harp, choir, strings, whistle, glass, bell, drip, pad, air, music box, drone, sub |
+| Yharnam | 25–28 | music box, strings, organ, bell, choir, brass, forge, stomp, whistle, drone, sub, air |
+| Minas Tirith | 29–32 | brass, choir, strings, organ, bell, harp, stomp, whistle, pad, drone, sub, air |
 
 The struck sounds (bell, forge, stomp, drip, harp, music box) are sparse by design.
 

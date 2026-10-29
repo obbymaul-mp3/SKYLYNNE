@@ -53,7 +53,7 @@ static struct {
     uint8_t slot[SV_N][SV_SLOT];
     uint32_t sum;
 } sv;
-#define SV_MAGIC 0x33594B53u                 /* "SKY3" */
+#define SV_MAGIC 0x34594B53u                 /* "SKY4" */
 
 static const char *const UI_MAC[4] = {"DENSITY", "MOTION", "COLOUR", "SPACE"};
 static const char *const UI_EDITK[4] = {"LEVEL", "PAN", "SUSTAIN", "TONE"};
