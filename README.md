@@ -23,7 +23,13 @@ The struck sounds (bell, forge, stomp, drip, harp, music box) are sparse by desi
 
 - **ARP** opens the arpeggiator on the selected voice (the other five carry on as they were; SELECT moves it to another voice). PATTERN: up, down, up-down, random, strum, even. RATE: 1/4, 1/8, 1/16, 1/16T, 1/32 of the BPM. RANGE: 1 to 3 octaves. GATE: note length. Pattern OFF (or a new preset) releases the voice.
 - **GLO** turns Glow on and off. The figure stands, rises and floats in a ball of energy, lightning crosses the sky, and the six voices play a heroic loop of 4 to 32 bars (LOOP) that builds in four stages: pads and roots, then voices, then lead and sparkle, then everything with hits. POWER sets how quickly it builds and how hard it hits, BOLTS how often the sky answers, AURA the colour (gold, white, blue, green, red, violet).
-- ARP and GLO settings are kept in the eight save slots.
+- **REC** is a live grain cloud, not a recorder. The scene's sound always flows into a short rolling buffer; REC (short press) turns grains on and opens the GRAINS page, pressing it again leaves the page, and once more switches it off. POS is how far back the grains read, SIZE their length, DENSITY how many and how often, PITCH their transposition (±12 semitones, flat in the middle). Hold REC to freeze the buffer and play the cloud from what it holds.
+- ARP, GLO and the grain settings are kept in the eight save slots.
+- The top-right of the scene shows the audio load (`CPU now/worst`) on the real device.
+
+## Voices
+
+Twenty-six voices now: the drones, pads, winds and bells, plus kalimba, celesta, e-piano and harpsichord (plucks and keys), taiko, a techno kick, a horn that swells, and an anthem choir stacked in octaves. Each world offers the ones that suit it; ALGORITHM steps through them.
 
 ![The cathedral's four presets over the deep's four](docs/images/worlds.png)
 

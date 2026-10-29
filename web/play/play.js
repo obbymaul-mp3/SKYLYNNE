@@ -106,7 +106,7 @@
     leds(new Uint8Array(pre.memory.buffer, pre.web_leds(), 41));
   };
   // the saved slots (the SAVE page) are kept in this browser
-  const STORE_KEY = "skylynne.slots.v2";
+  const STORE_KEY = "skylynne.slots.v3";
   const readStore = () => { try { const t = localStorage.getItem(STORE_KEY); return t ? Uint8Array.from(atob(t), (c) => c.charCodeAt(0)) : null; } catch (e) { return null; } };
   const writeStore = (b) => { try { localStorage.setItem(STORE_KEY, btoa(String.fromCharCode(...b))); } catch (e) { /* private window: slots last for this visit only */ } };
   const loadStore = (ex) => { const b = readStore(); if (b && b.length) { new Uint8Array(ex.memory.buffer, ex.web_store_ptr(), b.length).set(b); ex.web_store_set(b.length); } };
