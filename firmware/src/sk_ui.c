@@ -532,7 +532,12 @@ static void ui_panel(uint32_t now)
             label = UI_PGK[ui.page][i];
             frac = 0;
             switch (ui.page * 4u + (uint32_t)i) {
-            case PG_FX * 4u + 0: case PG_FX * 4u + 1: case PG_FX * 4u + 2: case PG_FX * 4u + 3:
+            case PG_FX * 4u + 2:
+                v = sk_s.fx[2];
+                if (v <= 64) { b[0] = 'o'; b[1] = 'f'; b[2] = 'f'; b[3] = 0; frac = 0; }
+                else { frac = (v - 64) * 4; ui_num(b, (v - 64) * 100 / 63); }
+                break;
+            case PG_FX * 4u + 0: case PG_FX * 4u + 1: case PG_FX * 4u + 3:
                 v = sk_s.fx[i]; frac = v * 2; ui_num(b, v * 100 / 127); break;
             case PG_SCL * 4u + 0: { const char *m = SK_NOTE_NAME[sk_s.root % 12u]; int k; for (k = 0; m[k]; k++) b[k] = m[k]; b[k] = 0; frac = sk_s.root * 255 / 11; break; }
             case PG_SCL * 4u + 1: {
@@ -675,6 +680,8 @@ static void ui_hud(uint32_t now)
     }
 }
 
+#include "sk_viz.c"
+
 static void ui_draw(uint32_t now)
 {
     if (ui.intro) {
@@ -700,6 +707,8 @@ static void ui_draw(uint32_t now)
         ph_draw(now);
     } else
         sc_draw(now);
+    if (ui.page != PG_PHYS)
+        viz_draw(now);
     ui_hud(now);
     ui_panel(now);
     sk_present();
