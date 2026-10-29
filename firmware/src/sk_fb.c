@@ -36,7 +36,7 @@ enum {
     C_G0, C_G1                                                 /* the city's glow in the sky and on the water */
 };
 
-#define FB_NTHEME 11
+#define FB_NTHEME 16
 /* three muted palettes after a flat blue-grey night: sky and water within a few steps of each other, near-black slate
  * land, a pale moon. They are close in value so that they blend into each other without a jolt. The pops of colour are
  * dusty. Only the city on the far shore is vivid: four neon colours and a faint glow of its own. */
@@ -173,6 +173,66 @@ static const uint32_t SK_THEME[FB_NTHEME][40] = {
         0x58FFC8, 0xFFE060, 0xD8FFE0, 0x80FF98,
         0x58A88C, 0x448878,
     },
+    {   /* Columbia: a pale sky over a sea of cloud, white stone, gold lights */
+        0x1C2638,
+        0x5C7C9C, 0x6C88A8, 0x7E96B0, 0x92A6BA, 0xAEB8C0, 0xCCC8BC,
+        0xB4B8BC, 0xA4ACB4, 0x909CA8, 0x7C8A9C, 0x6A788C, 0x5A687C,
+        0x2E3650, 0x8E9AB0, 0xC8CEDA, 0xECECF0,
+        0xFFF6E0, 0xF0DCB0, 0xF4F4F0, 0xC8D0DC,
+        0xD8A070, 0xD090A0, 0x78B4D0, 0x98C0A0, 0xE8D080,
+        0xE8EEF4, 0x9CAABC, 0x1C2638, 0x2E3A50, 0xA8BCD8, 0x88B0E0,
+        0xDCDCE0, 0xC86060,
+        0xFFD870, 0x80C8FF, 0xFFF4D0, 0xFF9AB0,
+        0xE8DCC0, 0xC8C8C8,
+    },
+    {   /* Babel: blue-violet heaven over a golden haze, sandstone brick, torches */
+        0x20161A,
+        0x4C5A78, 0x5E6A84, 0x76798A, 0x96888C, 0xBC9A82, 0xD8A878,
+        0xC09C70, 0xAC8A62, 0x98785A, 0x84664E, 0x705644, 0x5E4838,
+        0x20161A, 0x5A4438, 0x9C7A58, 0xD8B888,
+        0xFFEBC0, 0xE8C080, 0xF4E4C8, 0xB89C80,
+        0xE09040, 0xC08078, 0x88A8B8, 0xA0A070, 0xEAC060,
+        0xF0E6D4, 0xA89478, 0x20161A, 0x362824, 0xC09C68, 0xD8A050,
+        0xE8D0A8, 0xB8483C,
+        0xFFB040, 0xFF7A30, 0xFFE8A0, 0xE86030,
+        0xC89460, 0xA07448,
+    },
+    {   /* Lothlorien: green-gold light under a canopy, bark and moss, lamps */
+        0x141C12,
+        0x4C6A58, 0x5E7A5A, 0x728A5C, 0x8A985A, 0xA8A460, 0xC8B070,
+        0x7C8C58, 0x6C7C50, 0x5C6C48, 0x4C5C40, 0x3E4C36, 0x303C2C,
+        0x121A10, 0x3A4630, 0x6A7848, 0xB8A860,
+        0xFFF0B8, 0xE0C878, 0xF8F0C0, 0xC8C080,
+        0xE0A850, 0xC8A0A0, 0x98B8B0, 0xA8C870, 0xF0D860,
+        0xF0F0D8, 0xA4A888, 0x141C12, 0x26301F, 0xB8B068, 0xD8C060,
+        0xB0B888, 0xC8584C,
+        0xFFD850, 0xFFA830, 0xFFF0A8, 0xB8E060,
+        0xB0A048, 0x8C8038,
+    },
+    {   /* Yharnam: a sickly grey-gold sky, slate and soot, a blood-red moon, gaslight */
+        0x141214,
+        0x383840, 0x444248, 0x54504C, 0x6A6050, 0x827458, 0x9C8A68,
+        0x7A6C54, 0x6A5E4A, 0x5A5040, 0x4A4236, 0x3C362C, 0x302C24,
+        0x0E0C0E, 0x1C1A1E, 0x38343A, 0x6A6258,
+        0xD8786A, 0xA04C48, 0xC8A8A0, 0x806868,
+        0xD08A48, 0xA86C70, 0x7C9490, 0x90A070, 0xD0B060,
+        0xE4DCCC, 0x9C9080, 0x141214, 0x282428, 0xA08C70, 0xB86058,
+        0x8A8470, 0xA83838,
+        0xFFB848, 0xB8D868, 0xFFE0A0, 0xE05848,
+        0x8C7440, 0x6C5C38,
+    },
+    {   /* Minas Tirith: a dawn sky behind a white city, pale marble, warm lamps */
+        0x1A2230,
+        0x58759A, 0x6A84A4, 0x8096AC, 0x98A6B0, 0xB4B4AC, 0xD0C0A0,
+        0xB8B4A0, 0xA4A290, 0x90907F, 0x7C7E70, 0x6A6C62, 0x585A54,
+        0x1E2430, 0x7C8494, 0xC0C6D0, 0xF0F0F0,
+        0xFFF4D8, 0xF0D8A0, 0xF8F4E8, 0xC0C8D4,
+        0xD8A068, 0xD0A0A8, 0x88B0C8, 0xA0B888, 0xE8D080,
+        0xEEF0F4, 0xA0A8B8, 0x1A2230, 0x2C3646, 0xA8B8D0, 0xC8D0E0,
+        0xD8D4C8, 0xB04848,
+        0xFFE090, 0xA8D8FF, 0xFFFFF0, 0xFFC070,
+        0xE0D4B0, 0xC0B898,
+    },
 };
 
 static uint8_t fb[FB_W * FB_H] SK_POOL;
@@ -184,6 +244,7 @@ static int16_t fb_cx0, fb_cy0, fb_cx1 = FB_W, fb_cy1 = FB_H;   /* the clip recta
 
 static uint8_t fb_cur[40][3], fb_tgt[40][3];     /* the palette now, and where it is going: R G B */
 static uint8_t fb_fade_on, fb_started;
+static uint8_t fb_tint[5] = {0, 0, 0, 0, 128};    /* a preset's tint over its world's palette: r g b, how much (0..255), brightness (128 = as is) */
 
 static void fb_lut_set(uint32_t i)
 {
@@ -201,9 +262,16 @@ static void fb_theme(uint32_t t)
     uint32_t i;
     const uint32_t *rgb = SK_THEME[t % FB_NTHEME];
     for (i = 0; i < 40u; i++) {
-        fb_tgt[i][0] = (uint8_t)(rgb[i] >> 16);
-        fb_tgt[i][1] = (uint8_t)(rgb[i] >> 8);
-        fb_tgt[i][2] = (uint8_t)rgb[i];
+        uint32_t k;
+        for (k = 0; k < 3u; k++) {
+            int c = (int)((rgb[i] >> (16 - 8 * k)) & 255u);
+            if (i >= 1u && i <= 24u) {                                    /* sky, water, land, the sun, the stars: not the lights and the interface */
+                c = c * fb_tint[4] / 128;
+                c = c > 255 ? 255 : c;
+                c += ((int)fb_tint[k] - c) * (int)fb_tint[3] / 256;
+            }
+            fb_tgt[i][k] = (uint8_t)c;
+        }
         if (!fb_started) {
             fb_cur[i][0] = fb_tgt[i][0];
             fb_cur[i][1] = fb_tgt[i][1];
@@ -218,6 +286,8 @@ static void fb_theme(uint32_t t)
 static void fb_theme_snap(uint32_t t)            /* at once (the crash and update screens, the splash) */
 {
     fb_started = 0;
+    fb_tint[0] = fb_tint[1] = fb_tint[2] = fb_tint[3] = 0;
+    fb_tint[4] = 128;
     fb_theme(t);
 }
 

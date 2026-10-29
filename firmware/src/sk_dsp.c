@@ -29,11 +29,11 @@
 #define SK_ENDLESS 0x7FFFFFFFu           /* a gate that does not close */
 
 enum { VT_DRONE, VT_WHISTLE, VT_SUB, VT_PAD, VT_AIR, VT_CHOIR, VT_BRASS, VT_ORGAN, VT_BELL, VT_FORGE, VT_STOMP, VT_DRIP,
-       VT_WHALE, VT_GLASS, VT_N };
+       VT_WHALE, VT_GLASS, VT_STRING, VT_HARP, VT_MBOX, VT_ASCENT, VT_N };
 static const char *const SK_TYPE_NAME[VT_N] = {"Drone", "Whistle", "Sub", "Pad", "Air", "Choir", "Brass", "Organ", "Bell",
-                                               "Forge", "Stomp", "Drip", "Whale", "Glass"};
+                                               "Forge", "Stomp", "Drip", "Whale", "Glass", "Strings", "Harp", "Mbox", "Ascent"};
 /* the struck kinds: a short attack, then the whole length is the ring-out */
-#define SK_PERC(t) ((t) == VT_BELL || (t) == VT_FORGE || (t) == VT_STOMP || (t) == VT_DRIP)
+#define SK_PERC(t) ((t) == VT_BELL || (t) == VT_FORGE || (t) == VT_STOMP || (t) == VT_DRIP || (t) == VT_HARP || (t) == VT_MBOX)
 /* SUSTAIN -6..+6: the note's length times 2^(s/3) / 4 (Q8); the top step is endless */
 static const uint16_t SK_SUSM[13] = {64, 81, 102, 128, 161, 203, 256, 323, 406, 512, 645, 813, 1024};
 
@@ -77,7 +77,7 @@ typedef struct {
                                           * size (0..127) and layers (bit 0 octave up, 1 fifth, 2 octave down) */
     uint8_t mac[4];                      /* the macros it starts with: density, motion, colour, space */
     sk_vcfg_t v[SK_NV];
-    uint8_t world;                       /* 0 the city, 1 the cathedral, 2 the deep (sk_biomes.c): its sounds and its scene */
+    uint8_t world;                       /* 0 the city, 1 the cathedral, 2 the deep, 3 Columbia, 4 Babel, 5 Lothlorien, 6 Yharnam, 7 Minas Tirith (sk_biomes.c): its sounds and its scene */
 } sk_biome_t;
 
 typedef struct {
@@ -270,16 +270,38 @@ static void sk_start(sk_voice_t *v, uint32_t type, uint32_t note, uint32_t len, 
         v->linc[1] = 7000u + (sk_rand() & 8191u);
         break;
     }
-    case VT_BRASS: {
-        static const uint32_t DET[3] = {65480, 65536, 65600};
+    case VT_BRASS:
+    case VT_STRING: {
+        static const uint32_t DET[3] = {65480, 65536, 65600}, DETS[3] = {65180, 65536, 65890};
+        const uint32_t *dt = type == VT_BRASS ? DET : DETS;
         for (k = 0; k < 3u; k++)
-            v->tinc[k] = (uint32_t)(((uint64_t)SK_INC[nn] * DET[k]) >> 16);
-        v->lpk = 900 + (int32_t)hard * 90;
-        v->peak = 2700 + (int32_t)vel * 40;
-        v->linc[0] = 280000u + (sk_rand() & 32767u);
+            v->tinc[k] = (uint32_t)(((uint64_t)SK_INC[nn] * dt[k]) >> 16);
+        v->lpk = type == VT_BRASS ? 900 + (int32_t)hard * 90 : 1500 + (int32_t)hard * 100;
+        v->peak = type == VT_BRASS ? 2700 + (int32_t)vel * 40 : 2300 + (int32_t)vel * 34;
+        v->linc[0] = (type == VT_BRASS ? 280000u : 350000u) + (sk_rand() & 32767u);
         v->linc[1] = 6000u + (sk_rand() & 8191u);
         break;
     }
+    case VT_HARP:
+    case VT_MBOX: {
+        static const uint32_t RH[5] = {65536, 131072, 196608, 262144, 327680};     /* a plucked string: the harmonics */
+        static const uint32_t RM[5] = {65536, 196608, 353894, 536576, 720896};     /* a music box's comb: stiff tines */
+        const uint32_t *rt = type == VT_HARP ? RH : RM;
+        uint32_t nb = nn > (type == VT_HARP ? 96u : 84u) ? (type == VT_HARP ? 96u : 84u) : nn;
+        for (k = 0; k < 5u; k++)
+            v->tinc[k] = (uint32_t)(((uint64_t)SK_INC[nb] * rt[k]) >> 16);
+        v->br = type == VT_MBOX ? 60 + (int32_t)hard * 2 : 24 + (int32_t)hard;      /* the click of the pluck */
+        v->idx = 0;
+        v->peak = 3000 + (int32_t)vel * 40;
+        v->lpk = 9000 + (int32_t)hard * 150;                             /* how long the upper harmonics last */
+        break;
+    }
+    case VT_ASCENT:
+        v->tinc[0] = SK_INC[nn];
+        v->idx = 2 + (int32_t)hard / 40;                                 /* the rise per block (3 is an octave in 16 s) */
+        v->peak = 1600 + (int32_t)vel * 22;
+        v->linc[0] = 30000u + (sk_rand() & 8191u);
+        break;
     case VT_ORGAN: {
         for (k = 0; k < 4u; k++)                                         /* 8' 4' 2 2/3' 2' and the 16' */
             v->tinc[k] = SK_INC[nn > 96u ? 96u : nn] * (k + 1u);
@@ -821,7 +843,8 @@ static void sk_run_brass(sk_voice_t *v, int32_t *o, uint32_t n)
     {
         int32_t breathe = SK_LD(SK_SIN[v->lph[1] >> 22]);
         v->lph[1] += v->linc[1] * n;
-        cut = 700 + (int32_t)(((int64_t)(v->lpk - 700) * g1) >> 15);
+        cut = v->type == VT_STRING ? v->lpk / 2 + (int32_t)(((int64_t)(v->lpk / 2) * g1) >> 15)
+                                   : 700 + (int32_t)(((int64_t)(v->lpk - 700) * g1) >> 15);
         cut += (int32_t)(((int64_t)(cut >> 3) * breathe) >> 15);
         cut = sk_clampi(cut, 300, 24000);
         vib = (vib * ((g1 * (int32_t)sk_s.lfo[3]) >> 6)) >> 15;
@@ -1005,6 +1028,39 @@ static void sk_run_glass(sk_voice_t *v, int32_t *o, uint32_t n)
     }
 }
 
+
+/* ASCENT: five octave-spaced sines that all rise together and fade in at the bottom and out at the top, so the tone climbs
+ * for ever without getting higher (a Shepard tone); the pitch of the note sets the floor */
+static void sk_run_ascent(sk_voice_t *v, int32_t *o, uint32_t n)
+{
+    int32_t g, dg, a, pk = v->peak, w[5];
+    uint32_t i, k, inc[5], pos;
+    sk_swell(v, n, &g, &dg);
+    a = SK_LD(SK_SIN[v->lph[0] >> 22]);
+    v->lph[0] += v->linc[0] * n;
+    sk_glide(v, 0, 10);
+    v->pd += v->idx;
+    pos = (uint32_t)v->pd & 65535u;
+    {
+        uint32_t c = ((uint32_t)v->pd >> 16) % 5u;
+        for (k = 0; k < 5u; k++) {
+            uint32_t r = (k + c) % 5u;                                   /* this sine's place in the stack: it keeps its phase */
+            w[k] = SK_SIN[(((r << 16) + pos) / 5u >> 7) & 511u];
+            inc[k] = (uint32_t)(((uint64_t)v->inc[0] * (65536u + pos)) >> 16) << r;
+        }
+    }
+    for (i = 0; i < n; i++) {
+        int32_t s = 0;
+        for (k = 0; k < 5u; k++) {
+            s += (SK_SIN[v->ph[k] >> 22] * w[k]) >> 17;
+            v->ph[k] += inc[k];
+        }
+        g += dg;
+        s = (s * (32768 + (a >> 5))) >> 15;
+        o[i] = (int32_t)((((int64_t)s * (g >> 8)) >> 15) * pk >> 14);
+    }
+}
+
 /* the voices of a block: the dry stereo into l[] r[], and each voice's share into the reverb's and the grains' busses */
 static void sk_voices(int32_t *l, int32_t *r, int32_t *rv, int32_t *gr, uint32_t n)
 {
@@ -1023,10 +1079,14 @@ static void sk_voices(int32_t *l, int32_t *r, int32_t *rv, int32_t *gr, uint32_t
         case VT_PAD: sk_run_pad(v, o, n); break;
         case VT_AIR: sk_run_air(v, o, n); break;
         case VT_CHOIR: sk_run_choir(v, o, n); break;
-        case VT_BRASS: sk_run_brass(v, o, n); break;
+        case VT_BRASS:
+        case VT_STRING: sk_run_brass(v, o, n); break;
         case VT_ORGAN: sk_run_organ(v, o, n); break;
         case VT_BELL:
-        case VT_FORGE: sk_run_bell(v, o, n); break;
+        case VT_FORGE:
+        case VT_HARP:
+        case VT_MBOX: sk_run_bell(v, o, n); break;
+        case VT_ASCENT: sk_run_ascent(v, o, n); break;
         case VT_STOMP: sk_run_stomp(v, o, n); break;
         case VT_DRIP: sk_run_drip(v, o, n); break;
         case VT_WHALE: sk_run_whale(v, o, n); break;

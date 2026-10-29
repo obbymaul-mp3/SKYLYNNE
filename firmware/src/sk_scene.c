@@ -22,8 +22,18 @@
 static const uint8_t SC_COL[SK_NV] = {C_PINK, C_CYAN, C_YELLOW, C_EMBER, C_GREEN, C_ACC};     /* the voices' colours */
 static const int16_t SC_AIM[SK_NV][2] = {{70, 30}, {150, 38}, {196, 50}, {170, 100}, {60, 90}, {150, 150}};
 static const uint8_t SC_THEME[8] = {1, 0, 0, 2, 0, 2, 2, 1};      /* a city biome's sky: 0 slate night, 1 dusk haze, 2 mist */
-static const uint8_t SC_PAL[16] = {0, 0, 0, 0, 0, 0, 0, 0, 3, 5, 6, 7, 4, 8, 9, 10};   /* a biome's palette (sk_fb.c); 0..7 as SC_THEME */
-static const uint8_t SC_VAR[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 1, 2, 3};     /* its look within its world */
+/* a biome's palette (sk_fb.c); 0..7 as SC_THEME; a world's own palette, tinted per preset (SC_TINT) in the later worlds */
+static const uint8_t SC_PAL[36] = {0, 0, 0, 0, 0, 0, 0, 0, 3, 5, 6, 7, 4, 8, 9, 10, 11, 11, 11, 11, 12, 12, 12, 12, 13, 13, 13, 13,
+                                   14, 14, 14, 14, 15, 15, 15, 15};
+static const uint8_t SC_VAR[36] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3,
+                                   0, 1, 2, 3, 0, 1, 2, 3};                           /* its look within its world */
+static const uint8_t SC_TINT[20][5] = {
+    {0, 0, 0, 0, 128}, {255, 220, 160, 44, 128}, {150, 60, 120, 90, 100}, {60, 70, 90, 130, 85},          /* Columbia */
+    {0, 0, 0, 0, 128}, {120, 90, 170, 70, 120}, {60, 110, 110, 60, 110}, {255, 240, 200, 80, 140},      /* Babel */
+    {0, 0, 0, 0, 128}, {70, 90, 170, 100, 90}, {20, 30, 70, 170, 60}, {200, 110, 40, 70, 128},         /* Lothlorien */
+    {0, 0, 0, 0, 128}, {140, 150, 150, 110, 110}, {140, 30, 30, 90, 85}, {60, 60, 110, 110, 80},       /* Yharnam */
+    {0, 0, 0, 0, 128}, {130, 120, 110, 90, 90}, {255, 170, 130, 70, 128}, {20, 30, 60, 160, 55},       /* Minas Tirith */
+};
 static uint8_t sc_var;
 static uint8_t sc_world;                 /* the biome's world: 0 the city, 1 the cathedral (palette 3), 2 the deep (palette 4) */
 
@@ -88,8 +98,10 @@ static void sc_theme(uint32_t biome)
 {
     uint32_t i;
     sc_world = SK_BIOMES[biome % SK_NBIOME].world;
-    sc_var = SC_VAR[biome & 15u];
-    fb_theme(sc_world ? SC_PAL[biome & 15u] : SC_THEME[biome & 7u]);
+    sc_var = SC_VAR[biome % 36u];
+    for (i = 0; i < 5; i++)
+        fb_tint[i] = biome >= 16u ? SC_TINT[(biome - 16u) % 20u][i] : (i == 4 ? 128 : 0);
+    fb_theme(sc_world ? SC_PAL[biome % 36u] : SC_THEME[biome & 7u]);
     for (i = 0; i < FB_PAL; i++)
         sc.refl[i] = (uint8_t)i;
     for (i = 0; i < 6; i++)
@@ -751,6 +763,8 @@ static void sc_draw(uint32_t now)
         sc_mist(now);
         sc_shore();
         sc_nave(now);
+    } else if (sc_world >= 3) {                           /* Columbia, Babel, Lothlorien, Yharnam, Minas Tirith */
+        sc_world2(now);
     } else if (sc_world == 2) {                           /* the deep */
         sc_surface(now);
         sc_rays(now, 180, 0, -10, 30, (sc_var == 2 ? 1 : sc_var == 3 ? 6 : 3) + (sc_e[0] >> 6), 70 + (sc_e[0] >> 2));
@@ -773,6 +787,16 @@ static void sc_draw(uint32_t now)
         sc_terrace();
     else if (sc_world == 2)
         sc_ledge(now);
+    else if (sc_world == 3)
+        sc_col_ledge(now);
+    else if (sc_world == 4)
+        sc_bab_ledge(now);
+    else if (sc_world == 5)
+        sc_loth_ledge(now);
+    else if (sc_world == 6)
+        sc_yh_ledge(now);
+    else if (sc_world == 7)
+        sc_min_ledge(now);
     else
         sc_foreground();
     sc_figure(now);
@@ -780,6 +804,17 @@ static void sc_draw(uint32_t now)
         sc_motes(now);
     else if (sc_world == 2)
         sc_bubbles(now);
+    else if (sc_world == 3)
+        sc_petals(now, C_STAR, C_PINK, 22, 2, 1);
+    else if (sc_world == 4)
+        sc_petals(now, C_YELLOW, C_EMBER, 18, -2, -6);              /* sparks and ash rising from the kilns */
+    else if (sc_world == 5) {
+        sc_petals(now, C_N0, C_YELLOW, 24, -3, 8);                  /* mallorn leaves falling */
+        sc_boat(now);
+    } else if (sc_world == 6)
+        sc_petals(now, C_STAR2, C_MIST, 26, -2, 5);                 /* ash */
+    else if (sc_world == 7)
+        sc_petals(now, C_STAR, C_F3, 20, 6, 4);                     /* blossom on the wind */
     sc_fireflies(now);
     if (sc_in.on)
         sc_intro_proj(now);
