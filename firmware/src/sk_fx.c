@@ -58,6 +58,10 @@ static void sk_space(void)
     uint32_t s = sk_s.mac[3], i;
     int rt = (int)sk_s.b->rv + ((int)s - 64) / 6 + ((int)sk_s.fx[0] - 64) / 4;       /* ROOM: +-16 steps of the tail */
     int32_t g0;
+    if (sk_xf) {                                                       /* a hand-over: the old room's tail is cut short, then eased back */
+        uint32_t left = sk_xf > SK_XF_LEN / 2u ? SK_XF_LEN / 2u : sk_xf;   /* full for the first 3 s, then fading over the next 3 */
+        rt -= (int)(16u * left / (SK_XF_LEN / 2u));
+    }
     rt = rt < 0 ? 0 : rt > 31 ? 31 : rt;
     g0 = SK_RVG[rt];
     for (i = 0; i < SK_RVN; i++)                                       /* each line's share of the time */
@@ -347,10 +351,10 @@ static void sk_render(int32_t *out, uint32_t n)
     sk_delay(dl, wl, wr, n);
     for (i = 0; i < n; i++) {
         int32_t a = l[i] + wl[i], b = r[i] + wr[i];
-        sk_f.dc[0] += (a - sk_f.dc[0]) >> 10;                           /* a DC and rumble cut */
-        sk_f.dc[1] += (b - sk_f.dc[1]) >> 10;
-        a -= sk_f.dc[0];
-        b -= sk_f.dc[1];
+        sk_f.dc[0] += (a * 256 - sk_f.dc[0]) >> 10;                     /* a DC and rumble cut (kept in Q8 so that it settles to nothing) */
+        sk_f.dc[1] += (b * 256 - sk_f.dc[1]) >> 10;
+        a -= sk_f.dc[0] >> 8;
+        b -= sk_f.dc[1] >> 8;
         sk_f.mlow[0] += sk_q15(a - sk_f.mlow[0], hc);                  /* HIGH CUT: a one-pole low-pass over the whole mix */
         sk_f.mlow[1] += sk_q15(b - sk_f.mlow[1], hc);
         sk_f.mlow2[0] += sk_q15(sk_f.mlow[0] - sk_f.mlow2[0], hc);

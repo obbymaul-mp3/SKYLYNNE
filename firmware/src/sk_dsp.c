@@ -136,6 +136,9 @@ static struct {
 static struct {
     uint32_t step, clk, rnd, steplen, fall, bar;
 } sk_c;
+/* a change of biome: samples left of the hand-over (the old voices fade, the old room's tail is shortened, then it all returns) */
+#define SK_XF_LEN (6u * SK_FS)
+static uint32_t sk_xf;
 
 /* Glow: the whole scene powers up and a heroic loop takes over the six voices (the conductor waits). What the screen reads: */
 static struct { uint8_t on; uint32_t n; } sk_gl;
@@ -781,6 +784,18 @@ static void sk_glow_set(uint32_t on)
 static void sk_load(const sk_biome_t *b)
 {
     uint32_t i;
+    if (sk_s.b) {                                                    /* a hand-over: whatever still sounds fades out over about 4.5 s */
+        for (i = 0; i < SK_NV; i++) {
+            sk_voice_t *v = &sk_v[i];
+            if (v->act) {
+                v->gate = 1;
+                v->tgt = 0;
+                if (v->rstep < 42)
+                    v->rstep = 42;                                   /* 8388352 / (4.5 s of samples) */
+            }
+        }
+        sk_xf = SK_XF_LEN;
+    }
     sk_s.b = b;
     for (i = 0; i < 4u; i++)
         sk_s.mac[i] = b->mac[i];
@@ -853,6 +868,7 @@ static void sk_scale_set(uint32_t i)
 static void sk_tick(uint32_t n)
 {
     uint32_t i;
+    sk_xf = sk_xf > n ? sk_xf - n : 0u;
     if (!sk_s.hold) {
         sk_arp_tick(n);
         sk_c.clk += n;
