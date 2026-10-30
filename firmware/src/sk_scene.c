@@ -32,7 +32,7 @@ static const uint8_t SC_TINT[20][5] = {
     {0, 0, 0, 0, 128}, {120, 90, 170, 70, 120}, {60, 110, 110, 60, 110}, {255, 240, 200, 80, 140},      /* Babel */
     {0, 0, 0, 0, 128}, {70, 90, 170, 100, 90}, {20, 30, 70, 170, 60}, {200, 110, 40, 70, 128},         /* Lothlorien */
     {0, 0, 0, 0, 128}, {140, 150, 150, 110, 110}, {140, 30, 30, 90, 85}, {60, 60, 110, 110, 80},       /* Yharnam */
-    {0, 0, 0, 0, 128}, {130, 120, 110, 90, 90}, {255, 170, 130, 70, 128}, {20, 30, 60, 160, 55},       /* Minas Tirith */
+    {0, 0, 0, 0, 128}, {10, 20, 50, 150, 60}, {150, 70, 200, 80, 120}, {150, 40, 30, 90, 80},         /* 8-bit world */
 };
 static uint8_t sc_var;
 static uint8_t sc_tint0[5], sc_pal_id;   /* the biome's own tint, and its palette, for putting the sky back */
@@ -779,7 +779,7 @@ static void sc_draw(uint32_t now)
         sc_mist(now);
         sc_shore();
         sc_nave(now);
-    } else if (sc_world >= 3) {                           /* Columbia, Babel, Lothlorien, Yharnam, Minas Tirith */
+    } else if (sc_world >= 3) {                           /* Columbia, Babel, Lothlorien, Yharnam, the 8-bit world */
         sc_world2(now);
     } else if (sc_world == 2) {                           /* the deep */
         sc_surface(now);
@@ -813,7 +813,7 @@ static void sc_draw(uint32_t now)
     else if (sc_world == 6)
         sc_yh_ledge(now);
     else if (sc_world == 7)
-        sc_min_ledge(now);
+        sc_chip_ledge(now);
     else
         sc_foreground();
     sc_figure(now);
@@ -831,7 +831,7 @@ static void sc_draw(uint32_t now)
     } else if (sc_world == 6)
         sc_petals(now, C_STAR2, C_MIST, 26, -2, 5);                 /* ash */
     else if (sc_world == 7)
-        sc_petals(now, C_STAR, C_F3, 20, 6, 4);                     /* blossom on the wind */
+        sc_petals(now, C_N0, C_STAR, 14, 2, 3);                     /* coins glinting */
     sc_fireflies(now);
     if (sc_in.on)
         sc_intro_proj(now);

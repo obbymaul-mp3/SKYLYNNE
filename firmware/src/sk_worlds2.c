@@ -6,7 +6,7 @@
  *   4 Babel        a tower of tiers and a spiral ramp that goes up through the clouds out of the picture; torches, birds
  *   5 Lothlorien   huge golden-leaved trunks with flets, lamps and rope bridges, a river; leaves fall, a boat passes
  *   6 Yharnam      Victorian rooftops, spires and a bell tower in fog, a blood-red moon; gas lamps; crows
- *   7 Minas Tirith a white city in seven walled tiers up a mountain with a tower and flags; blossom drifts
+ *   7 8-bit world  pixel hills, a pipe and a brick castle on the horizon, ? blocks that hop and spin coins when the coin voices play
  *
  * The same roles as the other worlds: voice 1 the light (rays), voice 2 the sun or moon's glow, voice 3 what crosses the
  * sky (airship, birds, a boat, crows), voice 4 the windows, voice 5 the haze, voice 6 the swell. The figure always sits on
@@ -541,102 +541,147 @@ static void sc_yh_ledge(uint32_t now)
     sc_bush(228, SC_H, 22, 16, 0x61u);
 }
 
-/* ======================================================= 7 Minas Tirith === */
-static void sc_minas(uint32_t now)
+/* ============================================================ 7 the 8-bit world === */
+/* a blocky cloud: three stacked rows, each wider than the last */
+static void sc_pxcloud(int x, int y, int w, uint8_t c)
 {
-    int e = sc_e[3], lit = 22 + (e * 40 >> 8) + (sk_s.mac[0] >> 3), t, x, y, i;
-    for (x = 0; x < FB_W; x++)
-        sc_hmap[x] = 0;
-    /* the far range, pale, with snow */
-    for (x = 0; x < 128; x++) {
-        int h = 10 + (sc_tri(x * 3 + 40) >> 4) + (sc_tri(x + 120) >> 5);
-        fb_rect(x, SC_HZ - h, 1, h, C_F2);
-        if (h > 20)
-            fb_pset(x, SC_HZ - h, C_F3);
-    }
-    /* the mountain: a wedge up to a peak at the right, shaded on its right flank */
-    for (x = 112; x < FB_W; x++) {
-        int h = x < 196 ? (x - 112) * 92 / 84 : 92 - (x - 196) * 40 / 44, yy;
-        if (h < 6)
-            h = 6;
-        for (yy = 0; yy < h; yy++)
-            fb_pset(x, SC_HZ - 1 - yy, x < 190 ? C_F1 : C_F0);
-        fb_pset(x, SC_HZ - h, C_F3);
-        if (h > 70)
-            fb_pset(x, SC_HZ - h + 1, C_F3);
-    }
-    /* the seven tiers: each a wall with a crenellated top, houses behind it, a gate with a lamp */
-    for (t = 0; t < 7; t++) {
-        int y1 = SC_HZ - 2 - t * 11, x0 = 120 + t * 10, x1 = FB_W - 1 - (t > 4 ? (t - 4) * 4 : 0);
-        fb_rect(x0, y1 - 9, x1 - x0, 9, C_F2);
-        fb_hline(x0, y1 - 9, x1 - x0, C_F3);
-        for (x = x0; x < x1; x += 3)
-            fb_pset(x, y1 - 10, C_F2);
-        fb_rect(x1 - 4, y1 - 9, 4, 9, C_F1);
-        for (x = x0 + 6; x < x1 - 6; x += 11 + (t & 3)) {                /* houses: blocks with a pitched roof, a window lit */
-            uint32_t q = sc_hash((uint32_t)(t * 53 + x));
-            int hh = 5 + (int)(q % 6u), ww = 5 + (int)((q >> 6) % 4u);
-            fb_rect(x, y1 - 9 - hh, ww, hh, C_F3);
-            fb_hline(x - 1, y1 - 10 - hh, ww + 2, C_F1);
-            if ((int)(q % 100u) < lit + 30)
-                fb_pset(x + 2, y1 - 9 - hh / 2, C_N0);
-        }
-        fb_rect(x0 + 18 + t * 3, y1 - 6, 4, 6, C_F0);                    /* the gate and its lamp */
-        fb_pset(x0 + 19 + t * 3, y1 - 7, C_F0);
-        fb_pset(x0 + 19 + t * 3, y1 - 4, (((now >> 8) + (uint32_t)t) % 9u) ? C_N0 : C_N3);
-        for (x = x0; x < x1; x++)
-            if (SC_HZ - y1 + 10 > sc_hmap[x])
-                sc_hmap[x] = (int8_t)(SC_HZ - y1 + 10);
-    }
-    /* the white tower on the rock's top, its spire, the flags */
-    fb_rect(186, SC_HZ - 106, 8, 26, C_F3);
-    fb_vline(186, SC_HZ - 106, 26, C_F2);
-    fb_vline(193, SC_HZ - 106, 26, C_F1);
-    sc_spire(190, SC_HZ - 106, 10, 10, C_F3, C_F3);
-    fb_vline(190, SC_HZ - 122, 10, C_F3);
-    for (i = 0; i < 10; i++)
-        fb_pset(191 + i, SC_HZ - 121 + ((sc_tri((int)(now >> 4) + i * 40) - 128) >> 6) + i / 4, i & 1 ? C_F3 : C_PINK);
-    fb_hline(186, SC_HZ - 100, 8, C_N0);
-    {
-        int breathe = 2 + (sc_tri((int)(now >> 6)) >> 6);
-        for (x = 120; x < FB_W - 1; x++) {
-            int h = sc_hmap[x] + 8, g = 4 + breathe + (e >> 6);
-            for (y = 1; y <= g; y++) {
-                int yy = SC_HZ - h - y;
-                if (yy > 0 && ((x + yy) & 1) == 0 && y < g / 2 + 1 && fb[yy * FB_W + x] >= C_S0 && fb[yy * FB_W + x] <= C_S5)
-                    fb_pset(x, yy, C_G0);
-            }
-        }
+    fb_rect(x + 6, y, w - 12, 4, c);
+    fb_rect(x + 2, y + 4, w - 4, 4, c);
+    fb_rect(x, y + 8, w, 4, c);
+}
+
+/* a ? block: it hops when a coin voice strikes, and a coin spins out of it */
+static void sc_qblock(int x, int y, int e, uint32_t now)
+{
+    int hop = e >> 5;
+    y -= hop;
+    fb_rect(x, y, 14, 14, C_F0);
+    fb_rect(x + 1, y + 1, 12, 12, C_YELLOW);
+    fb_hline(x + 1, y + 1, 12, C_MOON);
+    fb_vline(x + 12, y + 2, 11, C_F1);
+    fb_hline(x + 2, y + 12, 11, C_F1);
+    fb_pset(x + 2, y + 2, C_F0);
+    fb_pset(x + 11, y + 2, C_F0);
+    fb_pset(x + 2, y + 11, C_F0);
+    fb_pset(x + 11, y + 11, C_F0);
+    fb_hline(x + 5, y + 3, 4, C_F0);                                     /* the ? */
+    fb_rect(x + 8, y + 4, 2, 2, C_F0);
+    fb_rect(x + 6, y + 6, 2, 2, C_F0);
+    fb_rect(x + 6, y + 9, 2, 2, C_F0);
+    if (e > 36) {
+        int w = 1 + (sc_tri((int)(now >> 2)) >> 6), cy = y - 12 - (e >> 3);
+        fb_rect(x + 7 - w, cy, w * 2, 9, C_N0);
+        fb_vline(x + 7, cy + 1, 7, C_MOON);
     }
 }
 
-static void sc_min_ledge(uint32_t now)
+static void sc_chip(uint32_t now)
 {
-    int x, y;
-    for (x = 0; x < SC_EDGE; x++) {
-        fb_rect(x, SC_PY, 1, SC_H - SC_PY, C_F0);
-        fb_pset(x, SC_PY, C_F2);
+    int x, k, i, hz = SC_HZ, e5 = sc_e[5], lit = 20 + (sk_s.mac[0] >> 2);
+    for (x = 0; x < FB_W; x++)
+        sc_hmap[x] = 0;
+    fb_disc(206, 30, 9, C_MOON);                                         /* a square-ish sun */
+    fb_disc(206, 30, 6, C_MOON2);
+    for (k = 0; k < 3; k++) {                                            /* clouds drifting left, a pixel at a time */
+        int w = 34 + k * 8, cx = (int)(((now >> 7) * (uint32_t)(1 + k) + (uint32_t)k * 97u) % 300u) - 60;
+        cx = FB_W - cx - 40;
+        sc_pxcloud(cx & ~1, 14 + k * 20, w, C_STAR);
+        fb_hline((cx & ~1) + 2, 14 + k * 20 + 11, w - 4, C_STAR2);
     }
-    for (y = SC_PY + 4; y < SC_H; y += 7) {                              /* white-stone courses, in shadow */
-        int off = ((y - SC_PY) / 7 & 1) * 7;
-        for (x = off; x < SC_EDGE; x += 14)
-            fb_vline(x, y, 7, C_F1);
-        fb_hline(0, y, SC_EDGE, C_F1);
+    for (i = 0; i < 6; i++) {                                            /* sparkles in the sky when the hat ticks */
+        uint32_t q = sc_hash((uint32_t)(i * 31) + (now >> 9));
+        if (e5 > 40 + i * 20)
+            fb_rect((int)(q % 230u), 10 + (int)((q >> 8) % 60u), 2, 2, C_STAR);
     }
-    for (x = 0; x < SC_EDGE; x += 8) {                                   /* crenellations: merlons on the rim, he sits in an embrasure */
-        if (x > 70 && x < 100)
-            continue;
-        fb_rect(x, SC_PY - 6, 5, 6, C_F1);
-        fb_hline(x, SC_PY - 6, 5, C_F2);
+    for (k = 0; k < 6; k++) {                                            /* two stepped green hills with eyes */
+        fb_rect(8 + k * 6, hz - 6 * (k + 1), 78 - k * 12, 6, C_F2);
+        if (k < 3)
+            fb_rect(150 + k * 7, hz - 6 * (k + 1) - 0, 60 - k * 14, 6, C_F2);
     }
-    fb_rect(SC_EDGE, SC_PY + 1, 3, SC_H - SC_PY - 1, C_F2);
-    fb_vline(18, SC_PY - 40, 34, C_F0);                                  /* a banner pole with a waving white banner */
-    for (y = 0; y < 14; y++)
-        for (x = 0; x < 12; x++)
-            fb_pset(19 + x + ((sc_tri((int)(now >> 4) + x * 40 + y * 10) - 128) >> 6), SC_PY - 40 + y, x < 2 ? C_F2 : C_F3);
-    fb_rect(27, SC_PY - 38, 2, 4, C_F1);
-    sc_bush(188, SC_H, 30, 10, 0x51u);
-    sc_bush(224, SC_H, 22, 14, 0x61u);
+    for (k = 2; k < 4; k++) {
+        fb_vline(40, hz - 6 * (k + 1), 5, C_F0);
+        fb_vline(48, hz - 6 * (k + 1), 5, C_F0);
+    }
+    for (x = 8; x < 86; x += 6)
+        fb_pset(x, hz - 3, C_F3);
+    fb_rect(0, hz - 4, FB_W, 4, C_F3);                                   /* the grass line along the horizon */
+    fb_hline(0, hz - 4, FB_W, C_GREEN);
+    /* the pipe */
+    fb_rect(120, hz - 34, 24, 30, C_F0);
+    fb_rect(121, hz - 34, 22, 30, C_GREEN);
+    fb_rect(135, hz - 34, 7, 30, C_F3);
+    fb_vline(125, hz - 34, 30, C_MOON);
+    fb_rect(117, hz - 42, 30, 10, C_F0);
+    fb_rect(118, hz - 41, 28, 8, C_GREEN);
+    fb_rect(138, hz - 41, 7, 8, C_F3);
+    fb_vline(122, hz - 41, 8, C_MOON);
+    /* the castle: brick, battlements, a flag on the tower, a window lit by the low pulse */
+    fb_rect(180, hz - 34, 50, 30, C_F0);
+    fb_rect(181, hz - 33, 48, 28, C_F1);
+    for (k = 0; k < 4; k++)
+        fb_hline(181, hz - 29 + k * 7, 48, C_F0);
+    for (x = 181; x < 229; x += 8)
+        for (k = 0; k < 4; k++)
+            fb_vline(x + ((k & 1) ? 4 : 0), hz - 33 + k * 7, 4, C_F0);
+    for (x = 180; x < 230; x += 10) {
+        fb_rect(x, hz - 40, 6, 6, C_F0);
+        fb_rect(x + 1, hz - 39, 4, 5, C_F1);
+    }
+    fb_rect(196, hz - 58, 18, 24, C_F0);
+    fb_rect(197, hz - 57, 16, 23, C_F1);
+    for (k = 0; k < 3; k++)
+        fb_rect(196 + k * 6, hz - 64, 6, 6, k == 1 ? C_BG : C_F0);
+    fb_rect(202, hz - 52, 6, 8, C_F0);
+    fb_rect(203, hz - 51, 4, 6, (sc_e[0] + sc_e[1] > 60 || (int)(now >> 10 & 7u) < lit / 20) ? C_N0 : C_BG);
+    fb_rect(201, hz - 24, 8, 20, C_F0);                                  /* the door */
+    fb_vline(205, hz - 74, 10, C_INK);
+    for (k = 0; k < 8; k++)
+        fb_rect(206 + k, hz - 74 + k / 2 + (k > 3 ? 0 : 0) + ((sc_tri((int)(now >> 4) + k * 60) - 128) >> 7), 1, 4 - k / 3, C_SCARF);
+    for (x = 117; x < 230; x++)
+        sc_hmap[x] = (int8_t)(x < 147 ? 38 : x >= 180 ? 60 : 0);
+    /* the floating blocks */
+    sc_qblock(52, hz - 62, sc_e[3], now);
+    sc_qblock(82, hz - 62, sc_e[4], now);
+    for (k = 0; k < 2; k++) {                                            /* two brick blocks between them */
+        int bx = 66 + k * 0;
+        (void)bx;
+    }
+    fb_rect(66, hz - 62, 14, 14, C_F0);
+    fb_rect(67, hz - 61, 12, 12, C_F1);
+    fb_hline(67, hz - 55, 12, C_F0);
+    fb_vline(73, hz - 61, 6, C_F0);
+    fb_vline(70, hz - 55, 6, C_F0);
+    fb_vline(76, hz - 55, 6, C_F0);
+}
+
+static void sc_chip_ledge(uint32_t now)
+{
+    int x, y, row;
+    fb_rect(0, SC_PY, SC_EDGE, SC_H - SC_PY, C_F0);
+    for (row = 0, y = SC_PY + 4; y < SC_H; y += 8, row++) {              /* ground bricks */
+        for (x = (row & 1) ? -8 : 0; x < SC_EDGE; x += 16) {
+            int x0 = x < 0 ? 0 : x, w = x < 0 ? 7 : 15;
+            if (x0 + w > SC_EDGE)
+                w = SC_EDGE - x0;
+            fb_rect(x0, y, w, 7, C_F1);
+            fb_hline(x0, y, w, C_EMBER);
+        }
+    }
+    fb_rect(0, SC_PY, SC_EDGE, 4, C_F3);                                 /* the grass lip */
+    fb_hline(0, SC_PY, SC_EDGE, C_GREEN);
+    for (x = 3; x < SC_EDGE; x += 8)
+        fb_pset(x, SC_PY + 3, C_F0);
+    fb_rect(SC_EDGE, SC_PY, 3, SC_H - SC_PY, C_F0);
+    /* a flagpole with its ball, and a green pennant that waves */
+    fb_vline(18, SC_PY - 62, 62, C_INK);
+    fb_rect(16, SC_PY - 66, 5, 5, C_N0);
+    for (y = 0; y < 10; y++)
+        fb_hline(19, SC_PY - 58 + y, 12 - y + ((sc_tri((int)(now >> 4) + y * 30) - 128) >> 7), C_GREEN);
+    /* a pixel bush by the edge of the lip */
+    fb_rect(40, SC_PY - 6, 26, 6, C_F2);
+    fb_rect(46, SC_PY - 12, 14, 6, C_F2);
+    fb_rect(48, SC_PY - 10, 2, 2, C_F3);
+    fb_rect(54, SC_PY - 10, 2, 2, C_F3);
 }
 
 /* the world's own scene, dispatched from sc_draw */
@@ -667,11 +712,7 @@ static void sc_world2(uint32_t now)
         sc_birds(now, 28, C_F0);
         break;
     default:
-        fb_disc(60, 36, 11, C_MOON);
-        sc_rays(now, 60, 36, -10, 40, 3 + (e0 >> 6), 60 + (e0 >> 2));
-        sc_mist(now);
-        sc_minas(now);
-        sc_birds(now, 40, C_F3);
+        sc_chip(now);
         break;
     }
 }

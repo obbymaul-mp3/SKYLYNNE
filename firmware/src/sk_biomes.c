@@ -316,52 +316,52 @@ static const sk_biome_t SK_BIOMES[] = {
          {VT_SUB, 28, 64, 1, 0, 255, 60, 0, 180, 14, 40, 0, 1},
      }, 6},
 
-    /* ---- Minas Tirith: a white city climbing a mountain, horns and strings ---- */
+    /* ---- 8-Bit World: chip drones, a four-bit triangle underneath, coins glinting above ---- */
     /* 32 */
-    {"White City", 2, 7, SK_MAJOR, 50, 29, 3, 60, 5, {40, 40, 60, 95},
+    {"Overworld", 0, 7, SK_MAJOR, 56, 24, 2, 40, 0, {40, 40, 60, 80},
      {
-         {VT_HORN, 50, 48, 1, 0, 140, 52, -28, 44, 60, 110, 40, 2},
-         {VT_ANTHEM, 66, 32, 1, 8, 200, 50, 26, 62, 70, 120, 80, 2},
-         {VT_STRING, 62, 40, 1, 13, 200, 50, -10, 64, 60, 110, 70, 2},
-         {VT_ORGAN, 50, 32, 1, 5, 220, 46, 0, 90, 40, 100, 40, 1},
-         {VT_BELL, 74, 64, 1, 30, 100, 44, 40, 56, 60, 127, 90, 3},
-         {VT_SUB, 26, 64, 1, 0, 255, 62, 0, 180, 16, 40, 0, 1},
+         {VT_PULSE, 48, 32, 1, 0, 255, 50, -24, 110, 50, 60, 30, 2},
+         {VT_PULSE, 60, 40, 1, 9, 255, 44, 26, 100, 60, 60, 30, 2},
+         {VT_TRI, 24, 64, 1, 0, 255, 62, 0, 120, 40, 20, 0, 1},
+         {VT_COIN, 84, 32, 3, 0, 150, 46, 34, 8, 80, 70, 50, 3},
+         {VT_COIN, 91, 24, 3, 5, 110, 40, -34, 8, 80, 70, 50, 3},
+         {VT_CHIPHAT, 96, 16, 5, 2, 150, 32, 10, 2, 60, 30, 0, 1},
      }, 7},
     /* 33 */
-    {"Seven Gates", 7, 7, SK_DORIAN, 42, 28, 2, 50, 5, {40, 46, 40, 90},
+    {"Underground", 9, 7, SK_MINOR, 44, 26, 2, 50, 0, {36, 36, 40, 90},
      {
-         {VT_TAIKO, 36, 128, 1, 0, 150, 52, 0, 18, 40, 110, 0, 1},
-         {VT_HORN, 43, 48, 1, 9, 150, 52, -30, 44, 40, 110, 40, 2},
-         {VT_CHOIR, 52, 32, 1, 14, 200, 48, 28, 66, 30, 110, 70, 2},
-         {VT_DRONE, 31, 40, 1, 0, 255, 58, -12, 120, 30, 80, 50, 1},
-         {VT_BELL, 55, 96, 1, 26, 100, 44, 40, 64, 50, 127, 80, 2},
-         {VT_SUB, 24, 64, 1, 0, 255, 62, 0, 190, 14, 40, 0, 1},
+         {VT_TRI, 21, 64, 1, 0, 255, 64, 0, 150, 40, 20, 0, 1},
+         {VT_PULSE, 45, 40, 1, 0, 255, 48, -20, 130, 40, 70, 30, 2},
+         {VT_PULSE, 57, 48, 1, 12, 255, 40, 24, 110, 50, 70, 30, 2},
+         {VT_COIN, 76, 48, 3, 0, 90, 40, -30, 8, 70, 80, 60, 3},
+         {VT_COIN, 81, 40, 3, 11, 70, 36, 30, 8, 70, 80, 60, 3},
+         {VT_CHIPHAT, 88, 16, 3, 4, 120, 30, 0, 2, 50, 30, 0, 1},
      }, 7},
     /* 34 */
-    {"Dawn Fields", 5, 7, SK_LYDIAN, 52, 30, 3, 60, 7, {42, 44, 65, 100},
+    {"Warp Zone", 5, 7, SK_LYDIAN, 62, 24, 2, 40, 0, {50, 56, 70, 80},
      {
-         {VT_STRING, 60, 32, 1, 0, 220, 52, -20, 64, 70, 110, 70, 2},
-         {VT_WHISTLE, 91, 40, 1, 6, 150, 44, 36, 28, 70, 120, 90, 3},
-         {VT_HARP, 74, 24, 3, 4, 140, 50, -36, 16, 70, 120, 80, 3},
-         {VT_CHOIR, 72, 40, 1, 12, 170, 44, 30, 54, 80, 120, 90, 2},
-         {VT_PAD, 55, 32, 1, 8, 220, 50, 0, 80, 50, 110, 60, 2},
-         {VT_AIR, 67, 24, 1, 5, 220, 46, 10, 60, 60, 120, 60, 2},
+         {VT_PULSE, 53, 32, 1, 0, 255, 46, -28, 90, 70, 60, 40, 3},
+         {VT_TRI, 29, 32, 5, 0, 220, 60, 0, 12, 40, 20, 0, 2},
+         {VT_PULSE, 65, 24, 1, 7, 255, 40, 30, 80, 80, 60, 40, 3},
+         {VT_COIN, 89, 64, 7, 0, 180, 44, 36, 8, 90, 70, 60, 4},
+         {VT_COIN, 77, 48, 5, 9, 150, 40, -36, 8, 90, 70, 60, 4},
+         {VT_CHIPHAT, 100, 16, 7, 1, 170, 30, 12, 2, 70, 30, 0, 1},
      }, 7},
     /* 35 */
-    {"Silent Citadel", 9, 7, SK_MINOR, 40, 30, 3, 90, 5, {36, 42, 30, 100},
+    {"Castle Keep", 7, 7, SK_PHRYGIAN, 40, 28, 3, 60, 0, {34, 34, 35, 95},
      {
-         {VT_ORGAN, 45, 32, 1, 0, 230, 46, 0, 100, 30, 100, 40, 1},
-         {VT_BELL, 69, 64, 1, 30, 110, 46, -36, 60, 50, 127, 80, 2},
-         {VT_STRING, 57, 40, 1, 9, 200, 48, 30, 80, 40, 110, 60, 2},
-         {VT_WHISTLE, 88, 40, 1, 13, 120, 40, 40, 26, 50, 120, 80, 2},
-         {VT_DRONE, 33, 40, 1, 0, 255, 58, -14, 120, 26, 80, 50, 1},
-         {VT_SUB, 24, 64, 1, 0, 255, 62, 0, 190, 14, 40, 0, 1},
+         {VT_TRI, 19, 64, 1, 0, 255, 64, 0, 170, 40, 30, 0, 1},
+         {VT_PULSE, 43, 48, 1, 0, 255, 46, -22, 140, 40, 80, 30, 2},
+         {VT_PULSE, 50, 40, 1, 14, 255, 38, 22, 120, 50, 80, 30, 2},
+         {VT_TRI, 31, 32, 3, 4, 150, 52, 0, 14, 40, 30, 0, 2},
+         {VT_COIN, 79, 64, 3, 0, 60, 36, 28, 8, 60, 90, 70, 3},
+         {VT_CHIPHAT, 84, 16, 2, 3, 110, 28, -8, 2, 40, 40, 0, 1},
      }, 7},
 };
 #define SK_NBIOME ((uint32_t)(sizeof SK_BIOMES / sizeof SK_BIOMES[0]))
 
 /* the sounds each world offers: ALGORITHM walks this list for the selected voice */
-static const uint8_t SK_WN[8] = {15, 15, 12, 15, 16, 15, 15, 15};
+static const uint8_t SK_WN[8] = {15, 15, 12, 15, 16, 15, 15, 10};
 static const uint8_t SK_WL[8][16] = {
     {VT_SSAW, VT_SGATE, VT_SPLUCK, VT_SBASS, VT_KICK, VT_EPIANO, VT_KALIMBA, VT_CHOIR, VT_PAD, VT_AIR, VT_SUB, VT_DRONE, VT_WHISTLE, VT_CELESTA, VT_ANTHEM},
     {VT_CHOIR, VT_BRASS, VT_ORGAN, VT_BELL, VT_FORGE, VT_STOMP, VT_DRONE, VT_PAD, VT_SUB, VT_WHISTLE, VT_HARPSI, VT_CELESTA, VT_HORN, VT_ANTHEM, VT_TAIKO},
@@ -370,7 +370,7 @@ static const uint8_t SK_WL[8][16] = {
     {VT_BRASS, VT_CHOIR, VT_FORGE, VT_STOMP, VT_ASCENT, VT_STRING, VT_ORGAN, VT_BELL, VT_DRONE, VT_SUB, VT_PAD, VT_WHISTLE, VT_KALIMBA, VT_TAIKO, VT_HORN, VT_KICK},
     {VT_HARP, VT_CHOIR, VT_STRING, VT_WHISTLE, VT_GLASS, VT_BELL, VT_DRIP, VT_PAD, VT_AIR, VT_MBOX, VT_DRONE, VT_SUB, VT_CELESTA, VT_KALIMBA, VT_HARPSI},
     {VT_MBOX, VT_STRING, VT_ORGAN, VT_BELL, VT_CHOIR, VT_BRASS, VT_FORGE, VT_STOMP, VT_WHISTLE, VT_DRONE, VT_SUB, VT_AIR, VT_HARPSI, VT_EPIANO, VT_CELESTA},
-    {VT_BRASS, VT_CHOIR, VT_STRING, VT_ORGAN, VT_BELL, VT_HARP, VT_STOMP, VT_WHISTLE, VT_PAD, VT_DRONE, VT_SUB, VT_AIR, VT_HORN, VT_TAIKO, VT_ANTHEM},
+    {VT_PULSE, VT_TRI, VT_COIN, VT_CHIPHAT, VT_DRONE, VT_SUB, VT_PAD, VT_KICK, VT_SPLUCK, VT_SBASS},
 };
 /* the next (d = 1) or previous sound in the world's list; a sound it does not list steps to its first */
 static uint8_t sk_next_type(uint32_t world, uint8_t cur, int d)
