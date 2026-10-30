@@ -1,3 +1,5 @@
 {
- "releases": []
+ "releases": [
+  {"version": "0.10.0", "tag": "v0.10.0", "sha256": "90adb7f723b0f25328d656b1ea49c5124c22d5ac1afe81255667bcbff1df8932"}
+ ]
 }
