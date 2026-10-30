@@ -15,7 +15,7 @@ The presets are grouped in worlds, and each world has its own sounds and its own
 | Babel | 17–20 | brass, choir, forge, stomp, ascent (a tone that rises for ever), strings, organ, bell, drone, sub, pad, whistle |
 | Lothlórien | 21–24 | harp, choir, strings, whistle, glass, bell, drip, pad, air, music box, drone, sub |
 | Yharnam | 25–28 | music box, strings, organ, bell, choir, brass, forge, stomp, whistle, drone, sub, air |
-| Minas Tirith | 29–32 | brass, choir, strings, organ, bell, harp, stomp, whistle, pad, drone, sub, air |
+| 8-Bit World | 29–32 | pulse drones, four-bit triangle bass, coin blips, chip hats (Overworld, Underground, Warp Zone, Castle Keep) |
 
 The struck sounds (bell, forge, stomp, drip, harp, music box) are sparse by design.
 
@@ -29,11 +29,13 @@ The struck sounds (bell, forge, stomp, drip, harp, music box) are sparse by desi
 
 ## Voices
 
-Twenty-six voices now: the drones, pads, winds and bells, plus kalimba, celesta, e-piano and harpsichord (plucks and keys), taiko, a techno kick, a horn that swells, and an anthem choir stacked in octaves. Each world offers the ones that suit it; ALGORITHM steps through them.
+Thirty-four voices now: the drones, pads, winds and bells, plus kalimba, celesta, e-piano and harpsichord (plucks and keys), taiko, a techno kick, a horn that swells, an anthem choir stacked in octaves, the Synth City synths, and four chip voices for the 8-bit world: a detuned pulse with drifting width, a four-bit triangle bass, a two-note coin blip and a held-noise hat. Each world offers the ones that suit it; ALGORITHM steps through them.
 
 ![The cathedral's four presets over the deep's four](docs/images/worlds.png)
 
-![Columbia, Babel, Lothlórien, Yharnam and Minas Tirith](docs/images/worlds2.png)
+![Columbia, Babel, Lothlórien, Yharnam and the 8-bit world](docs/images/worlds2.png)
+
+![The 8-bit world: Overworld, Underground, Warp Zone, Castle Keep](docs/images/chip.png)
 
 A second page is a physics sequencer: a polygon spins, balls fall inside it, and every wall hit plays a note on
 one of the voices.
